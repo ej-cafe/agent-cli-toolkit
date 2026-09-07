@@ -16,7 +16,7 @@ pnpm exec agent-cli --help
 pnpm --filter @agent-cli-toolkit/cli dev
 ```
 
-对外命令：`agent-cli`。
+对外命令：`agent-cli`。首次运行会创建 `~/.config/agent-cli-toolkit`（若设置了 `XDG_CONFIG_HOME`，则为 `$XDG_CONFIG_HOME/agent-cli-toolkit`），全局配置统一存放于此。
 
 ## 参与贡献
 

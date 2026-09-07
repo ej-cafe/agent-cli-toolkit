@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { getVersion, toolkitName } from "@agent-cli-toolkit/core";
+import {
+  ensureConfigDir,
+  getVersion,
+  toolkitName,
+} from "@agent-cli-toolkit/core";
 
 const { values } = parseArgs({
   options: {
@@ -9,6 +13,16 @@ const { values } = parseArgs({
   },
   allowPositionals: true,
 });
+
+try {
+  ensureConfigDir();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `${toolkitName}: failed to create config directory: ${message}\n`,
+  );
+  process.exit(1);
+}
 
 if (values.help) {
   process.stdout.write(`${toolkitName}

@@ -16,7 +16,7 @@ pnpm exec agent-cli --help
 pnpm --filter @agent-cli-toolkit/cli dev
 ```
 
-The public command is `agent-cli`.
+The public command is `agent-cli`. The first run creates `~/.config/agent-cli-toolkit` (or `$XDG_CONFIG_HOME/agent-cli-toolkit` when `XDG_CONFIG_HOME` is set). Global configuration is stored there.
 
 ## Contributing
 
