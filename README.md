@@ -1,37 +1,26 @@
 # agent-cli-toolkit
 
-#### 介绍
-提供轻量级命令行工具集，助力开发者快速构建与管理AI代理应用，支持插件扩展与多环境部署。
+TypeScript 命令行工具集，运行在 Node.js 上，使用 pnpm monorepo。用于构建与管理 AI 代理应用，规划支持插件扩展与多环境部署。
 
-#### 软件架构
-软件架构说明
+## 要求
 
+- Node.js >= 20
+- pnpm 12（见根目录 `packageManager`）
 
-#### 安装教程
+## 使用
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+```bash
+pnpm install
+pnpm build
+pnpm exec agent-cli --help
+pnpm --filter @agent-cli-toolkit/cli dev
+```
 
-#### 使用说明
+对外命令：`agent-cli`。
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## 参与贡献
 
-#### 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
-
-
-#### 特技
-
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+1. Fork 本仓库
+2. 新建功能分支
+3. 提交代码
+4. 新建 Pull Request

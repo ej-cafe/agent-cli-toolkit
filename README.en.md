@@ -1,36 +1,26 @@
 # agent-cli-toolkit
 
-#### Description
-提供轻量级命令行工具集，助力开发者快速构建与管理AI代理应用，支持插件扩展与多环境部署。
+A TypeScript CLI toolkit that runs on Node.js and is organized as a pnpm monorepo. It helps developers build and manage AI agent apps, with planned support for plugins and multi-environment deployment.
 
-#### Software Architecture
-Software architecture description
+## Requirements
 
-#### Installation
+- Node.js >= 20
+- pnpm 12 (see `packageManager` in the repo root)
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## Usage
 
-#### Instructions
+```bash
+pnpm install
+pnpm build
+pnpm exec agent-cli --help
+pnpm --filter @agent-cli-toolkit/cli dev
+```
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+The public command is `agent-cli`.
 
-#### Contribution
+## Contributing
 
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
-
-
-#### Gitee Feature
-
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+1. Fork this repository
+2. Create a feature branch
+3. Commit your changes
+4. Open a Pull Request
