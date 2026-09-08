@@ -1,25 +1,24 @@
 {
-  "name": "@agent-cli-toolkit/cli",
+  "name": "@agent-cli-toolkit/commands",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "agent-cli": "./dist/main.js"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "files": ["dist"],
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b",
-    "dev": "tsx src/main.ts",
-    "start": "node dist/main.js"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@agent-cli-toolkit/commands": "workspace:*",
     "@agent-cli-toolkit/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "catalog:",
     "typescript": "catalog:"
   }
 }

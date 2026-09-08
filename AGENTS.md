@@ -9,7 +9,8 @@ TypeScript CLI，运行在 Node.js 上，用 pnpm workspace 组织。用于构�
 - 语言：TypeScript（`strict`，ESM，`module` / `moduleResolution` 为 `NodeNext`）
 - 运行时：Node.js（版本见根目录 `engines.node`）
 - 包管理：只用 pnpm，禁止 npm / yarn
-- 工作区：`apps/*` 放可运行应用，`packages/*` 放共享库；包之间用 `workspace:` 协议
+- 工作区：`apps/*` 放可运行应用，`packages/*` 放库；包之间用 `workspace:` 协议
+- `apps/cli` 只做运行外壳（进程入口、全局配置目录）；命令的解析、调用和实现放在 `packages/*`，按命令或领域分包
 - 作用域：`@agent-cli-toolkit/*`；对外命令是 `agent-cli`
 - 相对导入必须带 `.js` 扩展名（即使源文件是 `.ts`）
 
