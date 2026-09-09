@@ -81,15 +81,39 @@ async function resolveTools(
   return promptTools();
 }
 
-function applyTools(name: string, tools: AgentTool[]): void {
+function applyTools(
+  name: string,
+  tools: AgentTool[],
+  modelId?: string,
+): void {
   const profile = getProfile(name);
   for (const tool of tools) {
     if (tool === "claude-code") {
-      applyClaudeCode(profile);
+      applyClaudeCode(profile, modelId);
     } else {
-      applyOpenCode(profile);
+      applyOpenCode(name, profile);
     }
   }
+}
+
+function resolveModel(
+  profileName: string,
+  modelFlag: string | undefined,
+  tools: AgentTool[],
+): string | undefined {
+  const modelId = modelFlag?.trim();
+  if (!modelId) {
+    return undefined;
+  }
+
+  const profile = getProfile(profileName);
+  if (!profile.models.some((item) => item.id === modelId)) {
+    fail(`未知模型: ${modelId}`);
+  }
+  if (!tools.includes("claude-code")) {
+    fail("--model 仅对 Claude Code 有效");
+  }
+  return modelId;
 }
 
 export async function runTokenUse(args: string[]): Promise<number> {
@@ -98,21 +122,25 @@ export async function runTokenUse(args: string[]): Promise<number> {
     options: {
       all: { type: "boolean", default: false },
       tool: { type: "string", multiple: true },
+      model: { type: "string" },
     },
     allowPositionals: true,
   });
 
+  const usage =
+    "用法: agent-cli token use <name> [--all | --tool <id>] [--model <id>]";
   const name = positionals[0]?.trim();
   if (!name) {
-    fail("用法: agent-cli token use <name> [--all | --tool <id>]");
+    fail(usage);
   }
 
   if (positionals.length > 1) {
-    fail("用法: agent-cli token use <name> [--all | --tool <id>]");
+    fail(usage);
   }
 
   const tools = await resolveTools(values.all === true, values.tool);
-  applyTools(name, tools);
+  const modelId = resolveModel(name, values.model, tools);
+  applyTools(name, tools, modelId);
   process.stdout.write(
     `已将 profile ${name} 应用到: ${tools.join(", ")}\n`,
   );

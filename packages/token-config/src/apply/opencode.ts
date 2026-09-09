@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fail } from "../errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "../json-file.js";
-import type { Platform, TokenProfile } from "../types.js";
+import type { TokenProfile } from "../types.js";
 import { claudeCompatibleUrl } from "./claude-url.js";
 
 const anthropicNpm = "@ai-sdk/anthropic";
@@ -13,10 +13,6 @@ export function openCodeConfigPath(): string {
     return join(xdgConfigHome, "opencode", "opencode.json");
   }
   return join(homedir(), ".config", "opencode", "opencode.json");
-}
-
-export function openCodeProviderId(platform: Platform): "bailian" | "tencent" {
-  return platform === "aliyun" ? "bailian" : "tencent";
 }
 
 function upsertModels(
@@ -37,7 +33,7 @@ function upsertModels(
   return models;
 }
 
-export function applyOpenCode(profile: TokenProfile): void {
+export function applyOpenCode(name: string, profile: TokenProfile): void {
   const path = openCodeConfigPath();
   const root = readJsonObject(path) ?? {};
   const providerValue = root.provider;
@@ -48,7 +44,7 @@ export function applyOpenCode(profile: TokenProfile): void {
     fail(`OpenCode 配置的 provider 必须是对象: ${path}`);
   }
 
-  const id = openCodeProviderId(profile.platform);
+  const id = name;
   const existingProvider = providers[id];
   const created = existingProvider === undefined;
   if (existingProvider !== undefined && !isRecord(existingProvider)) {
@@ -67,6 +63,7 @@ export function applyOpenCode(profile: TokenProfile): void {
     fail(`OpenCode provider.${id}.options 必须是对象: ${path}`);
   }
 
+  provider.name = name;
   options.apiKey = profile.token;
   options.baseURL = claudeCompatibleUrl(profile);
   provider.options = options;

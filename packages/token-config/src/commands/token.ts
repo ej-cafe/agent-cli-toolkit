@@ -11,7 +11,8 @@ export function printTokenUsage(): void {
   （交互式终端可省略标志，问答补齐缺失字段）
   agent-cli token delete <name>
   agent-cli token list
-  agent-cli token use <name> [--all | --tool <claude-code|opencode>]
+  agent-cli token use <name> [--all | --tool <claude-code|opencode>] [--model <id>]
+  （--model 仅对 Claude Code 有效）
 `);
 }
 

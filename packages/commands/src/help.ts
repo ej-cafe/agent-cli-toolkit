@@ -8,7 +8,7 @@ Usage:
   agent-cli token add [--name <name>] [--platform <aliyun|tencent>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
   agent-cli token delete <name>
   agent-cli token list
-  agent-cli token use <name> [--all | --tool <claude-code|opencode>]
+  agent-cli token use <name> [--all | --tool <claude-code|opencode>] [--model <id>]
 
 Commands:
   token add       添加一套云平台 token profile（可省略标志，在终端问答补齐）
@@ -19,6 +19,7 @@ Commands:
 Flags:
   --all           同步到全部已对接工具（Claude Code、OpenCode）
   --tool          指定工具，可重复：claude-code、opencode
+  --model         指定 Claude Code 默认模型（仅对 Claude Code 有效）
   --token         API token（可能出现在 shell 历史中，请谨慎使用）
 `);
 }

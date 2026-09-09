@@ -9,7 +9,10 @@ export function claudeSettingsPath(): string {
   return join(homedir(), ".claude", "settings.json");
 }
 
-export function applyClaudeCode(profile: TokenProfile): void {
+export function applyClaudeCode(
+  profile: TokenProfile,
+  modelId?: string,
+): void {
   const path = claudeSettingsPath();
   const existing = readJsonObject(path) ?? {};
   const envValue = existing.env;
@@ -20,6 +23,9 @@ export function applyClaudeCode(profile: TokenProfile): void {
 
   env.ANTHROPIC_AUTH_TOKEN = profile.token;
   env.ANTHROPIC_BASE_URL = claudeCompatibleUrl(profile);
+  if (modelId !== undefined) {
+    env.ANTHROPIC_MODEL = modelId;
+  }
 
   writeJsonAtomic(path, { ...existing, env });
 }
