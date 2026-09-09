@@ -105,7 +105,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
     }
   }
 
-  addProfile({
+  await addProfile({
     name: requireFlag(name, "--name"),
     platform: parsePlatform(requireFlag(platform, "--platform")),
     token: requireFlag(token, "--token"),

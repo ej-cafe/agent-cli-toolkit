@@ -3,6 +3,7 @@ import { fail } from "../errors.js";
 import { runTokenAdd } from "./add.js";
 import { runTokenDelete } from "./delete.js";
 import { runTokenList } from "./list.js";
+import { runTokenSyncModelList } from "./sync-model-list.js";
 import { runTokenUse } from "./use.js";
 
 export function printTokenUsage(): void {
@@ -13,6 +14,8 @@ export function printTokenUsage(): void {
   agent-cli token list
   agent-cli token use <name> [--all | --tool <claude-code|opencode>] [--model <id>]
   （--model 仅对 Claude Code 有效）
+  agent-cli token sync-model-list [--platform <aliyun|tencent>]
+  （腾讯云需 TENCENTCLOUD_SECRET_ID 与 TENCENTCLOUD_SECRET_KEY）
 `);
 }
 
@@ -35,6 +38,9 @@ export async function runTokenCommand(args: string[]): Promise<number> {
     }
     if (verb === "use") {
       return await runTokenUse(args.slice(1));
+    }
+    if (verb === "sync-model-list") {
+      return await runTokenSyncModelList(args.slice(1));
     }
   } catch (error) {
     const code =

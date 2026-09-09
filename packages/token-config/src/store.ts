@@ -3,6 +3,7 @@ import { ensureConfigDir, getConfigDir } from "@agent-cli-toolkit/core";
 import { modelsForPlatform } from "./catalog.js";
 import { fail } from "./errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "./json-file.js";
+import { fetchTencentModels } from "./tencent-models.js";
 import type {
   Platform,
   TokenProfile,
@@ -11,6 +12,7 @@ import type {
 } from "./types.js";
 
 const profileFileName = "token-profile.json";
+const modelListFileName = "model-list.json";
 
 export function isPlatform(value: string): value is Platform {
   return value === "aliyun" || value === "tencent";
@@ -18,6 +20,10 @@ export function isPlatform(value: string): value is Platform {
 
 export function profileFilePath(): string {
   return join(getConfigDir(), profileFileName);
+}
+
+export function modelListFilePath(): string {
+  return join(getConfigDir(), modelListFileName);
 }
 
 function parseModels(value: unknown): TokenProfileModel[] {
@@ -100,30 +106,127 @@ export function saveProfiles(file: TokenProfileFile): void {
   writeJsonAtomic(profileFilePath(), file);
 }
 
-export function addProfile(input: {
+function parseCatalogModels(
+  value: unknown,
+  label: string,
+): TokenProfileModel[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  return value.map((item, index) => {
+    if (!isRecord(item)) {
+      fail(`${label}[${index}] 必须是对象`);
+    }
+    const id = item.id;
+    const name = item.name;
+    if (typeof id !== "string" || id.trim() === "") {
+      fail(`${label}[${index}].id 无效`);
+    }
+    if (typeof name !== "string" || name.trim() === "") {
+      fail(`${label}[${index}].name 无效`);
+    }
+    return { id, name };
+  });
+}
+
+function loadModelListRoot(): Record<string, unknown> {
+  return readJsonObject(modelListFilePath()) ?? {};
+}
+
+export function getStoredPlatformModels(
+  platform: Platform,
+): TokenProfileModel[] | undefined {
+  return parseCatalogModels(
+    loadModelListRoot()[platform],
+    `model-list.json 中的 ${platform}`,
+  );
+}
+
+function writePlatformModels(
+  platform: Platform,
+  models: TokenProfileModel[],
+): void {
+  if (models.length === 0) {
+    fail("模型列表不能为空");
+  }
+  ensureConfigDir();
+  const root = loadModelListRoot();
+  writeJsonAtomic(modelListFilePath(), { ...root, [platform]: models });
+}
+
+function applyModelsToProfiles(
+  platform: Platform,
+  models: TokenProfileModel[],
+): void {
+  const file = loadProfiles();
+  let changed = false;
+  for (const profile of Object.values(file.profiles)) {
+    if (profile.platform === platform) {
+      profile.models = models.map((item) => ({ ...item }));
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveProfiles(file);
+  }
+}
+
+async function modelsForSync(platform: Platform): Promise<TokenProfileModel[]> {
+  if (platform === "aliyun") {
+    return modelsForPlatform("aliyun");
+  }
+  return fetchTencentModels();
+}
+
+export async function syncPlatformModels(
+  platform: Platform,
+): Promise<TokenProfileModel[]> {
+  const models = await modelsForSync(platform);
+  writePlatformModels(platform, models);
+  applyModelsToProfiles(platform, models);
+  return models;
+}
+
+export async function ensurePlatformModels(
+  platform: Platform,
+): Promise<TokenProfileModel[]> {
+  const stored = getStoredPlatformModels(platform);
+  if (stored !== undefined) {
+    return stored;
+  }
+  return syncPlatformModels(platform);
+}
+
+export async function addProfile(input: {
   name: string;
   platform: Platform;
   token: string;
   baseUrl: string;
   claudeBaseUrl?: string;
-}): TokenProfile {
+}): Promise<TokenProfile> {
   const file = loadProfiles();
   if (file.profiles[input.name] !== undefined) {
     fail(`profile 已存在: ${input.name}`);
   }
 
+  const models = await ensurePlatformModels(input.platform);
+  const latest = loadProfiles();
   const profile: TokenProfile = {
     platform: input.platform,
     token: input.token,
     baseUrl: input.baseUrl,
-    models: modelsForPlatform(input.platform),
+    models: models.map((item) => ({ ...item })),
   };
   if (input.claudeBaseUrl !== undefined) {
     profile.claudeBaseUrl = input.claudeBaseUrl;
   }
 
-  file.profiles[input.name] = profile;
-  saveProfiles(file);
+  latest.profiles[input.name] = profile;
+  saveProfiles(latest);
   return profile;
 }
 
