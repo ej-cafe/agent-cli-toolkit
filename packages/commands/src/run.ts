@@ -1,9 +1,24 @@
 import { parseArgs } from "node:util";
 import { getVersion, toolkitName } from "@agent-cli-toolkit/core";
+import { runTokenCommand, TokenConfigError } from "@agent-cli-toolkit/token-config";
 import { printHelp } from "./help.js";
 import { printVersion } from "./version.js";
 
-export function run(args: string[] = process.argv.slice(2)): number {
+export async function run(
+  args: string[] = process.argv.slice(2),
+): Promise<number> {
+  if (args[0] === "token") {
+    try {
+      return await runTokenCommand(args.slice(1));
+    } catch (error) {
+      if (error instanceof TokenConfigError) {
+        process.stderr.write(`${toolkitName}: ${error.message}\n`);
+        return 1;
+      }
+      throw error;
+    }
+  }
+
   const { values } = parseArgs({
     args,
     options: {

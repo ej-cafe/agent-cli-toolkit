@@ -12,4 +12,4 @@ try {
   process.exit(1);
 }
 
-process.exitCode = run();
+process.exitCode = await run();

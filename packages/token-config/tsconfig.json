@@ -7,5 +7,5 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "references": [{ "path": "../core" }, { "path": "../token-config" }]
+  "references": [{ "path": "../core" }]
 }
