@@ -9,13 +9,16 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@agent-cli-toolkit/core": "workspace:*"
+    "@agent-cli-toolkit/core": "workspace:*",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

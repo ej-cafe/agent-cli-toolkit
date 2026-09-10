@@ -12,8 +12,8 @@ export function printTokenUsage(): void {
   （交互式终端可省略标志，问答补齐缺失字段）
   agent-cli token delete <name>
   agent-cli token list
-  agent-cli token use <name> [--all | --tool <claude-code|opencode>] [--model <id>]
-  （--model 仅对 Claude Code 有效）
+  agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh>] [--model <id>]
+  （--model 对 Claude Code 与 dsh 有效）
   agent-cli token sync-model-list [--platform <aliyun|tencent>]
   （腾讯云需 TENCENTCLOUD_SECRET_ID 与 TENCENTCLOUD_SECRET_KEY）
 `);
