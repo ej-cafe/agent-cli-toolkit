@@ -16,7 +16,7 @@ Commands:
   token delete           按名称删除 profile
   token list             列出已保存的 profile（token 脱敏）
   token use              把 profile 写入 Claude Code / OpenCode / DeepSeek Harness 配置
-  token sync-model-list  按平台更新模型目录（可指定 --platform）
+  token sync-model-list  按平台更新模型目录（可指定 --platform，省略则更新全部平台）
 
 Flags:
   --all           同步到全部已对接工具（Claude Code、OpenCode、DeepSeek Harness）
@@ -25,6 +25,6 @@ Flags:
   --platform      指定云平台：aliyun、tencent（sync-model-list）
   --token         API token（可能出现在 shell 历史中，请谨慎使用）
 
-同步腾讯云模型列表时使用环境变量 TENCENTCLOUD_SECRET_ID 与 TENCENTCLOUD_SECRET_KEY。
+同步模型列表时每个平台都请求 {baseUrl}/models，没有内置目录。
 `);
 }

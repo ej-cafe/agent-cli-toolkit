@@ -28,7 +28,6 @@ export async function runTokenSyncModelList(args: string[]): Promise<number> {
   } else {
     platforms.push("aliyun", "tencent");
   }
-
   for (const platform of platforms) {
     await syncPlatformModels(platform);
   }

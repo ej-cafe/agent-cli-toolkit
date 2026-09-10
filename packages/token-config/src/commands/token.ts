@@ -15,7 +15,7 @@ export function printTokenUsage(): void {
   agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh>] [--model <id>]
   （--model 对 Claude Code 与 dsh 有效）
   agent-cli token sync-model-list [--platform <aliyun|tencent>]
-  （腾讯云需 TENCENTCLOUD_SECRET_ID 与 TENCENTCLOUD_SECRET_KEY）
+  （省略 --platform 时更新全部平台；各平台先尝试 {baseUrl}/models）
 `);
 }
 

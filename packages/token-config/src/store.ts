@@ -1,15 +1,19 @@
 import { join } from "node:path";
 import { ensureConfigDir, getConfigDir } from "@agent-cli-toolkit/core";
-import { modelsForPlatform } from "./catalog.js";
 import { fail } from "./errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "./json-file.js";
-import { fetchTencentModels } from "./tencent-models.js";
+import { tryFetchOpenAiModels } from "./openai-models.js";
 import type {
   Platform,
   TokenProfile,
   TokenProfileFile,
   TokenProfileModel,
 } from "./types.js";
+
+type ModelListCredentials = {
+  baseUrl: string;
+  token: string;
+};
 
 const profileFileName = "token-profile.json";
 const modelListFileName = "model-list.json";
@@ -175,17 +179,73 @@ function applyModelsToProfiles(
   }
 }
 
-async function modelsForSync(platform: Platform): Promise<TokenProfileModel[]> {
-  if (platform === "aliyun") {
-    return modelsForPlatform("aliyun");
+function credentialsKey(credentials: ModelListCredentials): string {
+  return `${credentials.baseUrl}\0${credentials.token}`;
+}
+
+function savedCredentialsForPlatform(
+  platform: Platform,
+): ModelListCredentials[] {
+  return Object.entries(loadProfiles().profiles)
+    .filter(([, profile]) => profile.platform === platform)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, profile]) => ({
+      baseUrl: profile.baseUrl,
+      token: profile.token,
+    }));
+}
+
+async function modelsFromOpenAi(
+  extra: ModelListCredentials | undefined,
+  platform: Platform,
+): Promise<{ models: TokenProfileModel[] } | { models: undefined; reason: string }> {
+  const tried = new Set<string>();
+  const candidates: ModelListCredentials[] = [];
+  if (extra !== undefined) {
+    candidates.push(extra);
   }
-  return fetchTencentModels();
+  candidates.push(...savedCredentialsForPlatform(platform));
+
+  if (candidates.length === 0) {
+    return { models: undefined, reason: "没有可用于请求 /models 的 profile" };
+  }
+
+  let lastReason = "无法从 /models 获取模型列表";
+  for (const credentials of candidates) {
+    const key = credentialsKey(credentials);
+    if (tried.has(key)) {
+      continue;
+    }
+    tried.add(key);
+    const result = await tryFetchOpenAiModels(
+      credentials.baseUrl,
+      credentials.token,
+    );
+    if (result.models !== undefined) {
+      return { models: result.models };
+    }
+    lastReason = result.reason;
+  }
+
+  return { models: undefined, reason: lastReason };
+}
+
+async function modelsForSync(
+  platform: Platform,
+  extra?: ModelListCredentials,
+): Promise<TokenProfileModel[]> {
+  const fromApi = await modelsFromOpenAi(extra, platform);
+  if (fromApi.models !== undefined) {
+    return fromApi.models;
+  }
+  fail(`无法获取 ${platform} 模型列表: ${fromApi.reason}`);
 }
 
 export async function syncPlatformModels(
   platform: Platform,
+  extra?: ModelListCredentials,
 ): Promise<TokenProfileModel[]> {
-  const models = await modelsForSync(platform);
+  const models = await modelsForSync(platform, extra);
   writePlatformModels(platform, models);
   applyModelsToProfiles(platform, models);
   return models;
@@ -193,12 +253,13 @@ export async function syncPlatformModels(
 
 export async function ensurePlatformModels(
   platform: Platform,
+  extra?: ModelListCredentials,
 ): Promise<TokenProfileModel[]> {
   const stored = getStoredPlatformModels(platform);
   if (stored !== undefined) {
     return stored;
   }
-  return syncPlatformModels(platform);
+  return syncPlatformModels(platform, extra);
 }
 
 export async function addProfile(input: {
@@ -213,7 +274,10 @@ export async function addProfile(input: {
     fail(`profile 已存在: ${input.name}`);
   }
 
-  const models = await ensurePlatformModels(input.platform);
+  const models = await ensurePlatformModels(input.platform, {
+    baseUrl: input.baseUrl,
+    token: input.token,
+  });
   const latest = loadProfiles();
   const profile: TokenProfile = {
     platform: input.platform,
