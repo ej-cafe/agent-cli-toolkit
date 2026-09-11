@@ -1,11 +1,14 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Document, isMap, isSeq } from "yaml";
+import { Document, isMap, isScalar, isSeq } from "yaml";
 import type { YAMLMap, YAMLSeq } from "yaml";
 import { fail } from "../errors.js";
 import type { TokenProfile } from "../types.js";
 import { loadYamlMap, writeYamlAtomic } from "../yaml-file.js";
+
+const posixEnvName = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const credentialsReservedKeys = new Set(["version", "refs", "records"]);
 
 export function dshHome(): string {
   const fromEnv = process.env.DSH_HOME?.trim();
@@ -25,7 +28,102 @@ export function dshCredentialsPath(): string {
 
 export function apiKeyEnvForProfile(name: string): string {
   const body = name.toUpperCase().replace(/[^A-Z0-9]/gu, "_");
-  return `AGENT_CLI_${body}_API_KEY`;
+  const env = `${body}_API_KEY`;
+  if (!posixEnvName.test(env)) {
+    fail(`无法从 profile 名称派生 apiKeyEnv: ${name}`);
+  }
+  return env;
+}
+
+function isPosixEnvName(value: string): boolean {
+  return posixEnvName.test(value);
+}
+
+function stringKeys(map: YAMLMap): string[] {
+  const keys: string[] = [];
+  for (const item of map.items) {
+    const raw = isScalar(item.key) ? item.key.value : item.key;
+    if (typeof raw !== "string") {
+      fail(".credentials.yaml 含无法迁入 refs 的键");
+    }
+    keys.push(raw);
+  }
+  return keys;
+}
+
+function isStringCredentialValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    return value.length > 0;
+  }
+  if (isScalar(value) && typeof value.value === "string") {
+    return value.value.length > 0;
+  }
+  return false;
+}
+
+function requireRefsMap(doc: Document): YAMLMap {
+  if (!doc.has("refs") || doc.get("refs") === null) {
+    doc.set("refs", doc.createNode({}));
+  }
+  const node = doc.get("refs");
+  if (!isMap(node)) {
+    fail(".credentials.yaml 的 refs 必须是映射");
+  }
+  return node;
+}
+
+function movePosixKeysToRefs(
+  doc: Document,
+  refs: YAMLMap,
+  keys: string[],
+): void {
+  for (const key of keys) {
+    if (!isPosixEnvName(key)) {
+      fail(`.credentials.yaml 含无法迁入 refs 的键: ${key}`);
+    }
+    const value = doc.get(key, true);
+    if (value === undefined || value === null) {
+      fail(`.credentials.yaml 含无法迁入 refs 的键: ${key}`);
+    }
+    if (!isStringCredentialValue(value)) {
+      fail(`.credentials.yaml 含无法迁入 refs 的键: ${key}`);
+    }
+    doc.delete(key);
+    refs.set(key, value);
+  }
+}
+
+function normalizeCredentialsDocument(doc: Document): YAMLMap {
+  if (doc.contents == null) {
+    doc.contents = doc.createNode({});
+  }
+  if (!isMap(doc.contents)) {
+    fail(".credentials.yaml 根节点必须是映射");
+  }
+
+  const keys = stringKeys(doc.contents);
+  if (keys.length === 0) {
+    doc.set("version", 1);
+    return requireRefsMap(doc);
+  }
+
+  if (!doc.has("version")) {
+    const toMove = keys.filter((key) => key !== "refs");
+    const refs = requireRefsMap(doc);
+    movePosixKeysToRefs(doc, refs, toMove);
+    doc.set("version", 1);
+    return refs;
+  }
+
+  const version = doc.get("version");
+  if (version !== 1) {
+    fail(".credentials.yaml 的 version 必须是整数 1");
+  }
+
+  const toMove = keys.filter((key) => !credentialsReservedKeys.has(key));
+  const refs = requireRefsMap(doc);
+  movePosixKeysToRefs(doc, refs, toMove);
+  return refs;
 }
 
 function assertMapOrMissing(
@@ -100,10 +198,13 @@ export function applyDsh(
   profile: TokenProfile,
   modelId?: string,
 ): void {
+  const apiKeyEnv = apiKeyEnvForProfile(name);
   const settingsPath = dshSettingsPath();
   const credentialsPath = dshCredentialsPath();
   const settings = loadYamlMap(settingsPath);
   const credentials = loadYamlMap(credentialsPath);
+  const refs = normalizeCredentialsDocument(credentials);
+  refs.set(apiKeyEnv, profile.token);
 
   assertMapOrMissing(settings, ["llm-pi-ai"], "llm-pi-ai");
   assertMapOrMissing(settings, ["llm-pi-ai", "providers"], "llm-pi-ai.providers");
@@ -123,7 +224,6 @@ export function applyDsh(
     ["llm-pi-ai", "providers", name],
     `llm-pi-ai.providers.${name}`,
   );
-  const apiKeyEnv = apiKeyEnvForProfile(name);
   provider.set("displayName", name);
   provider.set("api", "openai-completions");
   provider.set("baseURL", profile.baseUrl);
@@ -139,8 +239,6 @@ export function applyDsh(
     settings.setIn(["agent-default-model", "provider"], name);
     settings.setIn(["agent-default-model", "model"], modelId);
   }
-
-  credentials.set(apiKeyEnv, profile.token);
 
   mkdirSync(dshHome(), { recursive: true, mode: 0o700 });
   writeYamlAtomic(settingsPath, settings);
