@@ -10,13 +10,7 @@ import type {
   TokenProfileModel,
 } from "./types.js";
 
-type ModelListCredentials = {
-  baseUrl: string;
-  token: string;
-};
-
 const profileFileName = "token-profile.json";
-const modelListFileName = "model-list.json";
 
 export function isPlatform(value: string): value is Platform {
   return value === "aliyun" || value === "tencent";
@@ -24,10 +18,6 @@ export function isPlatform(value: string): value is Platform {
 
 export function profileFilePath(): string {
   return join(getConfigDir(), profileFileName);
-}
-
-export function modelListFilePath(): string {
-  return join(getConfigDir(), modelListFileName);
 }
 
 function parseModels(value: unknown): TokenProfileModel[] {
@@ -110,156 +100,40 @@ export function saveProfiles(file: TokenProfileFile): void {
   writeJsonAtomic(profileFilePath(), file);
 }
 
-function parseCatalogModels(
-  value: unknown,
+async function fetchModelsOrFail(
+  baseUrl: string,
+  token: string,
   label: string,
-): TokenProfileModel[] | undefined {
-  if (value === undefined) {
-    return undefined;
+): Promise<TokenProfileModel[]> {
+  const result = await tryFetchOpenAiModels(baseUrl, token);
+  if (result.models === undefined) {
+    fail(`无法获取 ${label} 模型列表: ${result.reason}`);
   }
-  if (!Array.isArray(value) || value.length === 0) {
-    return undefined;
-  }
-
-  return value.map((item, index) => {
-    if (!isRecord(item)) {
-      fail(`${label}[${index}] 必须是对象`);
-    }
-    const id = item.id;
-    const name = item.name;
-    if (typeof id !== "string" || id.trim() === "") {
-      fail(`${label}[${index}].id 无效`);
-    }
-    if (typeof name !== "string" || name.trim() === "") {
-      fail(`${label}[${index}].name 无效`);
-    }
-    return { id, name };
-  });
+  return result.models;
 }
 
-function loadModelListRoot(): Record<string, unknown> {
-  return readJsonObject(modelListFilePath()) ?? {};
-}
-
-export function getStoredPlatformModels(
-  platform: Platform,
-): TokenProfileModel[] | undefined {
-  return parseCatalogModels(
-    loadModelListRoot()[platform],
-    `model-list.json 中的 ${platform}`,
-  );
-}
-
-function writePlatformModels(
-  platform: Platform,
-  models: TokenProfileModel[],
-): void {
-  if (models.length === 0) {
-    fail("模型列表不能为空");
-  }
-  ensureConfigDir();
-  const root = loadModelListRoot();
-  writeJsonAtomic(modelListFilePath(), { ...root, [platform]: models });
-}
-
-function applyModelsToProfiles(
-  platform: Platform,
-  models: TokenProfileModel[],
-): void {
+export async function syncProfileModels(
+  name: string,
+): Promise<TokenProfileModel[]> {
   const file = loadProfiles();
-  let changed = false;
-  for (const profile of Object.values(file.profiles)) {
-    if (profile.platform === platform) {
-      profile.models = models.map((item) => ({ ...item }));
-      changed = true;
-    }
-  }
-  if (changed) {
-    saveProfiles(file);
-  }
-}
-
-function credentialsKey(credentials: ModelListCredentials): string {
-  return `${credentials.baseUrl}\0${credentials.token}`;
-}
-
-function savedCredentialsForPlatform(
-  platform: Platform,
-): ModelListCredentials[] {
-  return Object.entries(loadProfiles().profiles)
-    .filter(([, profile]) => profile.platform === platform)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, profile]) => ({
-      baseUrl: profile.baseUrl,
-      token: profile.token,
-    }));
-}
-
-async function modelsFromOpenAi(
-  extra: ModelListCredentials | undefined,
-  platform: Platform,
-): Promise<{ models: TokenProfileModel[] } | { models: undefined; reason: string }> {
-  const tried = new Set<string>();
-  const candidates: ModelListCredentials[] = [];
-  if (extra !== undefined) {
-    candidates.push(extra);
-  }
-  candidates.push(...savedCredentialsForPlatform(platform));
-
-  if (candidates.length === 0) {
-    return { models: undefined, reason: "没有可用于请求 /models 的 profile" };
+  const profile = file.profiles[name];
+  if (profile === undefined) {
+    fail(`profile 不存在: ${name}`);
   }
 
-  let lastReason = "无法从 /models 获取模型列表";
-  for (const credentials of candidates) {
-    const key = credentialsKey(credentials);
-    if (tried.has(key)) {
-      continue;
-    }
-    tried.add(key);
-    const result = await tryFetchOpenAiModels(
-      credentials.baseUrl,
-      credentials.token,
-    );
-    if (result.models !== undefined) {
-      return { models: result.models };
-    }
-    lastReason = result.reason;
+  const models = await fetchModelsOrFail(
+    profile.baseUrl,
+    profile.token,
+    name,
+  );
+  const latest = loadProfiles();
+  const current = latest.profiles[name];
+  if (current === undefined) {
+    fail(`profile 不存在: ${name}`);
   }
-
-  return { models: undefined, reason: lastReason };
-}
-
-async function modelsForSync(
-  platform: Platform,
-  extra?: ModelListCredentials,
-): Promise<TokenProfileModel[]> {
-  const fromApi = await modelsFromOpenAi(extra, platform);
-  if (fromApi.models !== undefined) {
-    return fromApi.models;
-  }
-  fail(`无法获取 ${platform} 模型列表: ${fromApi.reason}`);
-}
-
-export async function syncPlatformModels(
-  platform: Platform,
-  extra?: ModelListCredentials,
-): Promise<TokenProfileModel[]> {
-  const models = await modelsForSync(platform, extra);
-  writePlatformModels(platform, models);
-  applyModelsToProfiles(platform, models);
-  return models;
-}
-
-export async function ensurePlatformModels(
-  platform: Platform,
-  extra?: ModelListCredentials,
-): Promise<TokenProfileModel[]> {
-  const stored = getStoredPlatformModels(platform);
-  if (stored !== undefined) {
-    return stored;
-  }
-  return syncPlatformModels(platform, extra);
+  current.models = models.map((item) => ({ ...item }));
+  saveProfiles(latest);
+  return current.models;
 }
 
 export async function addProfile(input: {
@@ -274,11 +148,15 @@ export async function addProfile(input: {
     fail(`profile 已存在: ${input.name}`);
   }
 
-  const models = await ensurePlatformModels(input.platform, {
-    baseUrl: input.baseUrl,
-    token: input.token,
-  });
+  const models = await fetchModelsOrFail(
+    input.baseUrl,
+    input.token,
+    input.name,
+  );
   const latest = loadProfiles();
+  if (latest.profiles[input.name] !== undefined) {
+    fail(`profile 已存在: ${input.name}`);
+  }
   const profile: TokenProfile = {
     platform: input.platform,
     token: input.token,

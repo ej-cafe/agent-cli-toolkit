@@ -16,7 +16,7 @@ pnpm exec agent-cli --help
 pnpm --filter @agent-cli-toolkit/cli dev
 ```
 
-对外命令：`agent-cli`。首次运行会创建 `~/.config/agent-cli-toolkit`（若设置了 `XDG_CONFIG_HOME`，则为 `$XDG_CONFIG_HOME/agent-cli-toolkit`），全局配置统一存放于此。token profile 保存在该目录下的 `token-profile.json`，平台模型目录保存在 `model-list.json`。
+对外命令：`agent-cli`。首次运行会创建 `~/.config/agent-cli-toolkit`（若设置了 `XDG_CONFIG_HOME`，则为 `$XDG_CONFIG_HOME/agent-cli-toolkit`），全局配置统一存放于此。token profile（含各自的模型列表）保存在该目录下的 `token-profile.json`。
 
 ```bash
 agent-cli token add
@@ -28,11 +28,11 @@ agent-cli token use <name> --tool claude-code --model <id>
 agent-cli token use <name> --tool dsh --model <id>
 agent-cli token use <name> --tool claude-code --tool opencode --tool dsh
 agent-cli token sync-model-list
+agent-cli token sync-model-list --name <profile>
 agent-cli token sync-model-list --platform aliyun
-agent-cli token sync-model-list --platform tencent
 ```
 
-`token add` 可省略标志，在交互式终端问答补齐缺失字段。若该平台在 `model-list.json` 中尚无模型列表，会先同步再写入 profile。`token list` 列出已保存的 profile，token 会脱敏。`token use` 可将当前 profile 写入 Claude Code（`~/.claude/settings.json` 的 `env`）、OpenCode（`~/.config/opencode/opencode.json` 中以 profile 名称为键的 provider）和 DeepSeek Harness（`$DSH_HOME/settings.yaml` 的 `llm-pi-ai.providers.<name>`，默认 `$DSH_HOME` 为 `~/.dsh`）。`--model` 对 Claude Code 与 dsh 有效：分别写入 `env.ANTHROPIC_MODEL` 与顶层 `agent-default-model`。未指定 `--all` 或 `--tool` 时，会在命令行选择目标工具。`token sync-model-list` 按平台更新模型目录：可指定 `--platform`，省略则更新全部已支持平台；每个平台都从 `{baseUrl}/models` 拉取，没有内置回退。`--token` 可能出现在 shell 历史中，请谨慎使用。
+`token add` 可省略标志，在交互式终端问答补齐缺失字段；添加时会用该套凭据请求 `{baseUrl}/models`，失败则不写入 profile。`token list` 列出已保存的 profile，token 会脱敏。`token use` 可将当前 profile 写入 Claude Code（`~/.claude/settings.json` 的 `env`）、OpenCode（`~/.config/opencode/opencode.json` 中以 profile 名称为键的 provider）和 DeepSeek Harness（`$DSH_HOME/settings.yaml` 的 `llm-pi-ai.providers.<name>`，默认 `$DSH_HOME` 为 `~/.dsh`）。`--model` 对 Claude Code 与 dsh 有效：分别写入 `env.ANTHROPIC_MODEL` 与顶层 `agent-default-model`。未指定 `--all` 或 `--tool` 时，会在命令行选择目标工具。`token sync-model-list` 按 profile 更新模型列表：可指定 `--name`，可按 `--platform` 过滤，省略 `--name` 则同步全部目标；每个目标用自己的 `{baseUrl}/models`。`--token` 可能出现在 shell 历史中，请谨慎使用。
 
 ## 参与贡献
 
