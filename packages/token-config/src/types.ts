@@ -17,4 +17,4 @@ export type TokenProfileFile = {
   profiles: Record<string, TokenProfile>;
 };
 
-export type AgentTool = "claude-code" | "opencode" | "dsh";
+export type AgentTool = "claude-code" | "opencode" | "dsh" | "pi";

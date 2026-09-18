@@ -12,8 +12,8 @@ export function printTokenUsage(): void {
   （交互式终端可省略标志，问答补齐缺失字段）
   agent-cli token delete <name>
   agent-cli token list
-  agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh>] [--model <id>]
-  （--model 对 Claude Code 与 dsh 有效）
+  agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+  （--model 对 Claude Code、dsh 与 pi 有效）
   agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent>]
   （省略 --name 时同步全部目标 profile；--platform 仅过滤；每个目标用自己的 {baseUrl}/models）
 `);

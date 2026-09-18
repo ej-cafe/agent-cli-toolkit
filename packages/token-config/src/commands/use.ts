@@ -3,15 +3,19 @@ import { parseArgs } from "node:util";
 import { applyClaudeCode } from "../apply/claude-code.js";
 import { applyDsh } from "../apply/dsh.js";
 import { applyOpenCode } from "../apply/opencode.js";
+import { applyPi } from "../apply/pi.js";
 import { fail } from "../errors.js";
 import { getProfile } from "../store.js";
 import type { AgentTool } from "../types.js";
 
-const supportedTools: AgentTool[] = ["claude-code", "opencode", "dsh"];
+const supportedTools: AgentTool[] = ["claude-code", "opencode", "dsh", "pi"];
 
 function isAgentTool(value: string): value is AgentTool {
   return (
-    value === "claude-code" || value === "opencode" || value === "dsh"
+    value === "claude-code" ||
+    value === "opencode" ||
+    value === "dsh" ||
+    value === "pi"
   );
 }
 
@@ -24,6 +28,7 @@ async function promptTools(): Promise<AgentTool[]> {
   1) claude-code
   2) opencode
   3) dsh
+  4) pi
 `);
 
   const rl = createInterface({
@@ -59,6 +64,10 @@ async function promptTools(): Promise<AgentTool[]> {
     }
     if (token === "3" || token === "dsh") {
       selected.push("dsh");
+      continue;
+    }
+    if (token === "4" || token === "pi") {
+      selected.push("pi");
       continue;
     }
     fail(`未知工具: ${token}`);
@@ -100,8 +109,10 @@ function applyTools(
       applyClaudeCode(profile, modelId);
     } else if (tool === "opencode") {
       applyOpenCode(name, profile);
-    } else {
+    } else if (tool === "dsh") {
       applyDsh(name, profile, modelId);
+    } else {
+      applyPi(name, profile, modelId);
     }
   }
 }
@@ -120,8 +131,12 @@ function resolveModel(
   if (!profile.models.some((item) => item.id === modelId)) {
     fail(`未知模型: ${modelId}`);
   }
-  if (!tools.includes("claude-code") && !tools.includes("dsh")) {
-    fail("--model 仅对 Claude Code 与 dsh 有效");
+  if (
+    !tools.includes("claude-code") &&
+    !tools.includes("dsh") &&
+    !tools.includes("pi")
+  ) {
+    fail("--model 仅对 Claude Code、dsh 与 pi 有效");
   }
   return modelId;
 }
