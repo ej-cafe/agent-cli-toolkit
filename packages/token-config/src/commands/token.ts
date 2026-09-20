@@ -4,6 +4,7 @@ import { runTokenAdd } from "./add.js";
 import { runTokenDelete } from "./delete.js";
 import { runTokenList } from "./list.js";
 import { runTokenSyncModelList } from "./sync-model-list.js";
+import { runTokenUsage } from "./usage.js";
 import { runTokenUse } from "./use.js";
 
 export function printTokenUsage(): void {
@@ -16,6 +17,8 @@ export function printTokenUsage(): void {
   （--model 对 Claude Code、dsh 与 pi 有效）
   agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent>]
   （省略 --name 时同步全部目标 profile；--platform 仅过滤；每个目标用自己的 {baseUrl}/models）
+  agent-cli token usage [--platform aliyun]
+  （查询套餐余量；当前仅支持阿里云百炼，需本机 bl 且已 bl auth login --console）
 `);
 }
 
@@ -41,6 +44,9 @@ export async function runTokenCommand(args: string[]): Promise<number> {
     }
     if (verb === "sync-model-list") {
       return await runTokenSyncModelList(args.slice(1));
+    }
+    if (verb === "usage") {
+      return await runTokenUsage(args.slice(1));
     }
   } catch (error) {
     const code =
