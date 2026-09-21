@@ -3,6 +3,7 @@ import { ensureConfigDir, getConfigDir } from "@agent-cli-toolkit/core";
 import { fail } from "./errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "./json-file.js";
 import { tryFetchOpenAiModels } from "./openai-models.js";
+import { isPlatform } from "./platforms/registry.js";
 import type {
   Platform,
   TokenProfile,
@@ -12,14 +13,7 @@ import type {
 
 const profileFileName = "token-profile.json";
 
-export function isPlatform(value: string): value is Platform {
-  return (
-    value === "aliyun" ||
-    value === "tencent" ||
-    value === "deepseek" ||
-    value === "kimi"
-  );
-}
+export { isPlatform } from "./platforms/registry.js";
 
 export function profileFilePath(): string {
   return join(getConfigDir(), profileFileName);

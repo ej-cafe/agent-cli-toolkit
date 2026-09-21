@@ -22,12 +22,13 @@ TypeScript CLI，运行在 Node.js 上，用 pnpm workspace 组织。用于构�
 pnpm install
 pnpm build
 pnpm typecheck
+pnpm test
 pnpm dev
 pnpm exec agent-cli --help
 pnpm --filter <package> <script>
 ```
 
-开发用 `tsx` 跑源码；发布产物在各包 `dist/`。
+开发用 `tsx` 跑源码；发布产物在各包 `dist/`。单测用 Node 内置 `node:test`（经 `tsx` 直跑 TS），放在各包 `test/` 目录（`*.test.ts`，不进 `tsc -b` 构建图）；测试间用临时 `XDG_CONFIG_HOME` / 环境变量隔离，不触真实用户配置。
 
 ## 工作方式
 

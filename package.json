@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
+    "test": "node --import tsx --test packages/*/test/*.test.ts",
     "dev": "pnpm --filter @agent-cli-toolkit/cli dev"
   },
   "devDependencies": {

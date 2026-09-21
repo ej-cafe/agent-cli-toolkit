@@ -12,6 +12,7 @@ TypeScript 命令行工具集，运行在 Node.js 上，使用 pnpm monorepo。�
 ```bash
 pnpm install
 pnpm build
+pnpm test
 pnpm exec agent-cli --help
 pnpm --filter @agent-cli-toolkit/cli dev
 ```
