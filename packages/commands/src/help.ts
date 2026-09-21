@@ -16,14 +16,14 @@ Commands:
   token add              添加一套云平台 token profile（可省略标志，在终端问答补齐；deepseek / kimi 可省略 URL 用官方预设）
   token delete           按名称删除 profile
   token list             列出已保存的 profile（token 脱敏）
-  token use              把 profile 写入 Claude Code / OpenCode / DeepSeek Harness / pi 配置
+  token use              把 profile 写入 Claude Code / OpenCode / DeepSeek Harness（dsh） / pi 配置。配置目录或对应程序不存在时跳过该工具，且不创建该配置目录
   token sync-model-list  按 profile 更新模型列表（可指定 --name；--platform 过滤；省略 --name 则同步全部目标）
   token usage            按 profile 分段查询余量（段间空行；可用 --name / --output）
 
 Flags:
-  --all           同步到全部已对接工具（Claude Code、OpenCode、DeepSeek Harness、pi）
-  --tool          指定工具，可重复：claude-code、opencode、dsh、pi
-  --model         指定默认模型（对 Claude Code、dsh 与 pi 有效；应用到 pi 时总会设置 defaultProvider 与 defaultModel，有 --model 用该 id，否则用模型列表第一项）
+  --all           同步到全部已对接工具（Claude Code、OpenCode、DeepSeek Harness（dsh）、pi）。配置目录或程序不存在的工具会跳过，且不创建该配置目录
+  --tool          指定工具，可重复：claude-code、opencode、dsh、pi。dsh 的显示名是 DeepSeek Harness（dsh）
+  --model         指定默认模型（对 Claude Code、DeepSeek Harness（dsh）与 pi 有效；应用到 pi 时总会设置 defaultProvider 与 defaultModel，有 --model 用该 id，否则用模型列表第一项）
   --name          指定 profile（sync-model-list；token usage）
   --output        token usage 输出格式：table（默认）、text、raw
   --platform      指定云平台：aliyun、tencent、deepseek、kimi（add / sync-model-list）

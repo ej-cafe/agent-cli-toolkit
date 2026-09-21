@@ -4,6 +4,7 @@ import { fail } from "../errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "../json-file.js";
 import type { TokenProfile } from "../types.js";
 import { claudeCompatibleUrl } from "./claude-url.js";
+import { inspectTool } from "./presence.js";
 
 const anthropicNpm = "@ai-sdk/anthropic";
 
@@ -34,6 +35,9 @@ function upsertModels(
 }
 
 export function applyOpenCode(name: string, profile: TokenProfile): void {
+  if (!inspectTool("opencode").ok) {
+    return;
+  }
   const path = openCodeConfigPath();
   const root = readJsonObject(path) ?? {};
   const providerValue = root.provider;

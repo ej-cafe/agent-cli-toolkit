@@ -32,8 +32,13 @@ describe("runTokenCommand dispatch", () => {
   });
 
   it("exits 0 for --help and -h", async () => {
-    assert.equal(await runTokenCommand(["--help"]), 0);
-    assert.equal(await runTokenCommand(["-h"]), 0);
+    const help = await captureStd(() => runTokenCommand(["--help"]));
+    const short = await captureStd(() => runTokenCommand(["-h"]));
+    assert.equal(help.code, 0);
+    assert.equal(short.code, 0);
+    assert.match(help.stderr, /DeepSeek Harness（dsh）/);
+    assert.match(help.stderr, /配置目录或对应程序不存在时跳过该工具，且不创建该配置目录/);
+    assert.match(help.stderr, /--tool 的取值仍是 dsh/);
   });
 
   it("reports unknown verbs with exit 1", async () => {

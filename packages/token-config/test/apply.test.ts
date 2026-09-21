@@ -1,30 +1,62 @@
 import assert from "node:assert/strict";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isMap, isSeq } from "yaml";
+import { Document, isMap, isSeq } from "yaml";
 import { apiKeyEnvForProfile, applyDsh } from "../src/apply/dsh.js";
 import { applyPi } from "../src/apply/pi.js";
 import { applyOpenCode } from "../src/apply/opencode.js";
+import { applyClaudeCode } from "../src/apply/claude-code.js";
 import { claudeCompatibleUrl } from "../src/apply/claude-url.js";
-import { readJsonObject } from "../src/json-file.js";
+import { readJsonObject, writeJsonAtomic } from "../src/json-file.js";
+import { writeYamlAtomic } from "../src/yaml-file.js";
 import { loadYamlMap } from "../src/yaml-file.js";
 import type { TokenProfile } from "../src/types.js";
 import { useTempXdgConfig } from "./helpers.js";
 
 const cleanupDirs: Array<() => void> = [];
+const envRestore = new Map<string, string | undefined>();
 
 after(() => {
   for (const cleanup of cleanupDirs.splice(0)) {
     cleanup();
   }
+  for (const [name, value] of envRestore) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  }
+  envRestore.clear();
 });
 
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "agent-cli-apply-"));
   cleanupDirs.push(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+function setEnv(name: string, value: string): void {
+  if (!envRestore.has(name)) {
+    envRestore.set(name, process.env[name]);
+  }
+  process.env[name] = value;
+}
+
+function stubExecutable(directory: string, name: string): void {
+  mkdirSync(directory, { recursive: true });
+  const file = join(directory, name);
+  writeFileSync(file, "");
+  chmodSync(file, 0o755);
+}
+
+function useProgram(name: string): string {
+  const bin = tempDir();
+  stubExecutable(bin, name);
+  setEnv("PATH", bin);
+  return bin;
 }
 
 function profile(overrides: Partial<TokenProfile> = {}): TokenProfile {
@@ -75,7 +107,8 @@ describe("apiKeyEnvForProfile", () => {
 
 describe("applyDsh", () => {
   beforeEach(() => {
-    process.env.DSH_HOME = tempDir();
+    setEnv("DSH_HOME", tempDir());
+    useProgram("dsh");
   });
 
   function settings() {
@@ -171,7 +204,8 @@ describe("applyDsh", () => {
 
 describe("applyPi", () => {
   beforeEach(() => {
-    process.env.PI_CODING_AGENT_DIR = tempDir();
+    setEnv("PI_CODING_AGENT_DIR", tempDir());
+    useProgram("pi");
   });
 
   it("writes provider, auth, and default settings", () => {
@@ -236,6 +270,8 @@ describe("applyOpenCode", () => {
 
   beforeEach(() => {
     ({ cleanup: cleanupXdg } = useTempXdgConfig());
+    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "opencode"), { recursive: true });
+    useProgram("opencode");
   });
 
   afterEach(() => {
@@ -296,5 +332,90 @@ describe("applyOpenCode", () => {
       m1: { name: "Model One" },
       m2: { name: "Renamed" },
     });
+  });
+});
+
+describe("apply skips absent tools", () => {
+  it("does not create a missing Claude Code directory", () => {
+    const home = tempDir();
+    setEnv("HOME", home);
+    useProgram("claude");
+    applyClaudeCode(profile());
+    assert.equal(existsSync(join(home, ".claude")), false);
+  });
+
+  it("does not modify Claude Code settings when the program is missing", () => {
+    const home = tempDir();
+    setEnv("HOME", home);
+    setEnv("PATH", tempDir());
+    const dir = join(home, ".claude");
+    mkdirSync(dir);
+    const settings = join(dir, "settings.json");
+    writeFileSync(settings, "{\"hooks\":{}}\n", "utf8");
+    applyClaudeCode(profile());
+    assert.equal(readFileSync(settings, "utf8"), "{\"hooks\":{}}\n");
+  });
+
+  it("creates Claude Code settings inside an existing directory", () => {
+    const home = tempDir();
+    setEnv("HOME", home);
+    useProgram("claude");
+    mkdirSync(join(home, ".claude"));
+    applyClaudeCode(profile());
+    const env = readJson(join(home, ".claude", "settings.json")).env as Record<
+      string,
+      unknown
+    >;
+    assert.equal(env.ANTHROPIC_AUTH_TOKEN, "sk-test");
+    assert.equal(env.ANTHROPIC_BASE_URL, "https://example.test/v1");
+  });
+
+  it("does not create a missing dsh directory", () => {
+    const root = tempDir();
+    const home = join(root, "missing-dsh");
+    setEnv("DSH_HOME", home);
+    useProgram("dsh");
+    applyDsh("my-pro", profile());
+    assert.equal(existsSync(home), false);
+  });
+
+  it("does not modify dsh files when the program is missing", () => {
+    const home = tempDir();
+    setEnv("DSH_HOME", home);
+    setEnv("PATH", tempDir());
+    const settings = join(home, "settings.yaml");
+    writeFileSync(settings, "keep: yes\n", "utf8");
+    applyDsh("my-pro", profile(), "m1");
+    assert.equal(readFileSync(settings, "utf8"), "keep: yes\n");
+  });
+
+  it("does not create a missing pi directory", () => {
+    const root = tempDir();
+    const dir = join(root, "missing-pi");
+    setEnv("PI_CODING_AGENT_DIR", dir);
+    useProgram("pi");
+    applyPi("my-pro", profile(), "m1");
+    assert.equal(existsSync(dir), false);
+  });
+
+  it("does not create a missing OpenCode directory", () => {
+    const xdg = tempDir();
+    setEnv("XDG_CONFIG_HOME", xdg);
+    useProgram("opencode");
+    applyOpenCode("my-pro", profile());
+    assert.equal(existsSync(join(xdg, "opencode")), false);
+  });
+});
+
+describe("atomic writers still create parent directories", () => {
+  it("creates missing parents for json and yaml", () => {
+    const root = tempDir();
+    const jsonPath = join(root, "nested", "a.json");
+    writeJsonAtomic(jsonPath, { ok: true });
+    assert.equal(readJson(jsonPath).ok, true);
+
+    const yamlPath = join(root, "nested-yaml", "a.yaml");
+    writeYamlAtomic(yamlPath, new Document({ ok: true }));
+    assert.equal(existsSync(yamlPath), true);
   });
 });

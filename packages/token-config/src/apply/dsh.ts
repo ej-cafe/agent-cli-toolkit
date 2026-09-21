@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync } from "node:fs";
+import { chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Document, isMap, isScalar, isSeq } from "yaml";
@@ -6,6 +6,7 @@ import type { YAMLMap, YAMLSeq } from "yaml";
 import { fail } from "../errors.js";
 import type { TokenProfile } from "../types.js";
 import { loadYamlMap, writeYamlAtomic } from "../yaml-file.js";
+import { inspectTool } from "./presence.js";
 
 const posixEnvName = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const credentialsReservedKeys = new Set(["version", "refs", "records"]);
@@ -198,6 +199,9 @@ export function applyDsh(
   profile: TokenProfile,
   modelId?: string,
 ): void {
+  if (!inspectTool("dsh").ok) {
+    return;
+  }
   const apiKeyEnv = apiKeyEnvForProfile(name);
   const settingsPath = dshSettingsPath();
   const credentialsPath = dshCredentialsPath();
@@ -240,7 +244,6 @@ export function applyDsh(
     settings.setIn(["agent-default-model", "model"], modelId);
   }
 
-  mkdirSync(dshHome(), { recursive: true, mode: 0o700 });
   writeYamlAtomic(settingsPath, settings);
   writeYamlAtomic(credentialsPath, credentials, {
     fileMode: 0o600,

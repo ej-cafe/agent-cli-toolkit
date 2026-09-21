@@ -4,6 +4,7 @@ import { fail } from "../errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "../json-file.js";
 import type { TokenProfile } from "../types.js";
 import { claudeCompatibleUrl } from "./claude-url.js";
+import { inspectTool } from "./presence.js";
 
 export function claudeSettingsPath(): string {
   return join(homedir(), ".claude", "settings.json");
@@ -13,6 +14,9 @@ export function applyClaudeCode(
   profile: TokenProfile,
   modelId?: string,
 ): void {
+  if (!inspectTool("claude-code").ok) {
+    return;
+  }
   const path = claudeSettingsPath();
   const existing = readJsonObject(path) ?? {};
   const envValue = existing.env;
