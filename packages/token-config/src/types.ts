@@ -1,4 +1,17 @@
-export type Platform = "aliyun" | "tencent";
+export type Platform = "aliyun" | "tencent" | "deepseek" | "kimi";
+
+/** Official DeepSeek OpenAI-compatible base URL (overridable on add). */
+export const DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com";
+
+/** Official DeepSeek Anthropic-compatible base URL (overridable on add). */
+export const DEEPSEEK_DEFAULT_CLAUDE_BASE_URL =
+  "https://api.deepseek.com/anthropic";
+
+/** Official Kimi (Moonshot CN) OpenAI-compatible base URL (overridable on add). */
+export const KIMI_DEFAULT_BASE_URL = "https://api.moonshot.cn/v1";
+
+/** Official Kimi (Moonshot CN) Anthropic-compatible base URL (overridable on add). */
+export const KIMI_DEFAULT_CLAUDE_BASE_URL = "https://api.moonshot.cn/anthropic";
 
 export type TokenProfileModel = {
   id: string;

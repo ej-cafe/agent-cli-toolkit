@@ -6,7 +6,7 @@ import { applyOpenCode } from "../apply/opencode.js";
 import { applyPi } from "../apply/pi.js";
 import { fail } from "../errors.js";
 import { getProfile } from "../store.js";
-import type { AgentTool } from "../types.js";
+import type { AgentTool, TokenProfile } from "../types.js";
 
 const supportedTools: AgentTool[] = ["claude-code", "opencode", "dsh", "pi"];
 
@@ -98,12 +98,24 @@ async function resolveTools(
   return promptTools();
 }
 
+function firstModelId(name: string, profile: TokenProfile): string {
+  const id = profile.models[0]?.id.trim() ?? "";
+  if (id === "") {
+    fail(`profile "${name}" 没有可用模型，无法设置 pi 的 defaultModel`);
+  }
+  return id;
+}
+
 function applyTools(
   name: string,
   tools: AgentTool[],
   modelId?: string,
 ): void {
   const profile = getProfile(name);
+  const piModelId = tools.includes("pi")
+    ? (modelId ?? firstModelId(name, profile))
+    : undefined;
+
   for (const tool of tools) {
     if (tool === "claude-code") {
       applyClaudeCode(profile, modelId);
@@ -111,8 +123,8 @@ function applyTools(
       applyOpenCode(name, profile);
     } else if (tool === "dsh") {
       applyDsh(name, profile, modelId);
-    } else {
-      applyPi(name, profile, modelId);
+    } else if (piModelId !== undefined) {
+      applyPi(name, profile, piModelId);
     }
   }
 }

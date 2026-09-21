@@ -13,7 +13,12 @@ import type {
 const profileFileName = "token-profile.json";
 
 export function isPlatform(value: string): value is Platform {
-  return value === "aliyun" || value === "tencent";
+  return (
+    value === "aliyun" ||
+    value === "tencent" ||
+    value === "deepseek" ||
+    value === "kimi"
+  );
 }
 
 export function profileFilePath(): string {

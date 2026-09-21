@@ -8,7 +8,7 @@ import {
 } from "../store.js";
 
 const usage =
-  "用法: agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent>]";
+  "用法: agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]";
 
 export async function runTokenSyncModelList(args: string[]): Promise<number> {
   const { values, positionals } = parseArgs({

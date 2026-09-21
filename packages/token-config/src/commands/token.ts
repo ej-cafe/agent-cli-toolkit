@@ -9,16 +9,16 @@ import { runTokenUse } from "./use.js";
 
 export function printTokenUsage(): void {
   process.stderr.write(`用法:
-  agent-cli token add [--name <name>] [--platform <aliyun|tencent>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
-  （交互式终端可省略标志，问答补齐缺失字段）
+  agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+  （交互式终端可省略标志，问答补齐缺失字段；deepseek / kimi 可省略 URL，使用官方预设，显式传入则覆盖）
   agent-cli token delete <name>
   agent-cli token list
   agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
-  （--model 对 Claude Code、dsh 与 pi 有效）
-  agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent>]
+  （--model 对 Claude Code、dsh 与 pi 有效；应用到 pi 时总会设置 defaultProvider（profile 名称）与 defaultModel，有 --model 用该 id，否则用模型列表第一项）
+  agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
   （省略 --name 时同步全部目标 profile；--platform 仅过滤；每个目标用自己的 {baseUrl}/models）
-  agent-cli token usage [--platform aliyun]
-  （查询套餐余量；当前仅支持阿里云百炼，需本机 bl 且已 bl auth login --console）
+  agent-cli token usage [--platform aliyun|deepseek|kimi] [--name <profile>]
+  （aliyun 默认：百炼 Token Plan，需 bl auth login --console；deepseek / kimi：账户余额，用对应 profile，可用 --name）
 `);
 }
 

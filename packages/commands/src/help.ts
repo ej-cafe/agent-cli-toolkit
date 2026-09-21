@@ -5,30 +5,32 @@ export function printHelp(): void {
 
 Usage:
   agent-cli [--help] [--version]
-  agent-cli token add [--name <name>] [--platform <aliyun|tencent>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+  agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
   agent-cli token delete <name>
   agent-cli token list
   agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
-  agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent>]
-  agent-cli token usage [--platform aliyun]
+  agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+  agent-cli token usage [--platform aliyun|deepseek|kimi] [--name <profile>]
 
 Commands:
-  token add              添加一套云平台 token profile（可省略标志，在终端问答补齐）
+  token add              添加一套云平台 token profile（可省略标志，在终端问答补齐；deepseek / kimi 可省略 URL 用官方预设）
   token delete           按名称删除 profile
   token list             列出已保存的 profile（token 脱敏）
   token use              把 profile 写入 Claude Code / OpenCode / DeepSeek Harness / pi 配置
   token sync-model-list  按 profile 更新模型列表（可指定 --name；--platform 过滤；省略 --name 则同步全部目标）
-  token usage            查询套餐余量（当前仅支持阿里云百炼；需本机 bl 且已 bl auth login --console）
+  token usage            查询套餐余量或账户余额（aliyun 默认需 bl；deepseek / kimi 用 profile API Key）
 
 Flags:
   --all           同步到全部已对接工具（Claude Code、OpenCode、DeepSeek Harness、pi）
   --tool          指定工具，可重复：claude-code、opencode、dsh、pi
-  --model         指定默认模型（对 Claude Code、dsh 与 pi 有效）
-  --name          指定要同步的 profile（sync-model-list）
-  --platform      指定云平台：aliyun、tencent（sync-model-list 过滤器；usage 当前仅 aliyun）
+  --model         指定默认模型（对 Claude Code、dsh 与 pi 有效；应用到 pi 时总会设置 defaultProvider 与 defaultModel，有 --model 用该 id，否则用模型列表第一项）
+  --name          指定 profile（sync-model-list；usage --platform deepseek|kimi）
+  --platform      指定云平台：aliyun、tencent、deepseek、kimi（sync-model-list 过滤器；usage 支持 aliyun、deepseek、kimi）
   --token         API token（可能出现在 shell 历史中，请谨慎使用）
 
+DeepSeek 预设 base-url 为 https://api.deepseek.com，claude-base-url 为 https://api.deepseek.com/anthropic；显式传入则覆盖。
+Kimi 中国站预设 base-url 为 https://api.moonshot.cn/v1，claude-base-url 为 https://api.moonshot.cn/anthropic；显式传入则覆盖（国际站可用 api.moonshot.ai）。
 同步模型列表时每个目标 profile 都请求自己的 {baseUrl}/models，没有平台级共享目录。
-token usage 查询的是百炼 Token Plan 订阅级余量，不读取 token-profile.json 中的 API Key。
+token usage：aliyun 查询百炼 Token Plan 订阅级余量（不读 profile API Key，需 bl auth login --console）；deepseek 查询账户余额（GET {baseUrl}/user/balance）；kimi 查询账户余额（GET {baseUrl}/users/me/balance）；后两者使用对应平台 profile，可用 --name；仅一套时可省略。
 `);
 }

@@ -3,13 +3,23 @@ import { promisify } from "node:util";
 import { parseArgs } from "node:util";
 import { fail } from "../errors.js";
 import { isRecord } from "../json-file.js";
+import { getProfile, loadProfiles } from "../store.js";
+import type { Platform, TokenProfile } from "../types.js";
 
 const execFileAsync = promisify(execFile);
 
-type UsagePlatform = "aliyun" | "tencent";
+const usageHelp =
+  "用法: agent-cli token usage [--platform aliyun|deepseek|kimi] [--name <profile>]";
+
+type UsagePlatform = "aliyun" | "tencent" | "deepseek" | "kimi";
 
 function isUsagePlatform(value: string): value is UsagePlatform {
-  return value === "aliyun" || value === "tencent";
+  return (
+    value === "aliyun" ||
+    value === "tencent" ||
+    value === "deepseek" ||
+    value === "kimi"
+  );
 }
 
 function formatPercent(fraction: number): string {
@@ -40,7 +50,7 @@ function formatWindow(
   return parts.join(" · ");
 }
 
-function summarizeUsage(data: Record<string, unknown>): string {
+function summarizeAliyunUsage(data: Record<string, unknown>): string {
   const lines: string[] = ["阿里云百炼 Token Plan 余量"];
   const fiveHour = formatWindow(
     "5 小时窗口",
@@ -60,6 +70,74 @@ function summarizeUsage(data: Record<string, unknown>): string {
   }
   if (lines.length === 1) {
     lines.push(JSON.stringify(data, null, 2));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function summarizeDeepseekBalance(data: Record<string, unknown>): string {
+  const lines: string[] = ["DeepSeek 账户余额"];
+  if (typeof data.is_available === "boolean") {
+    lines.push(`可用: ${data.is_available ? "是" : "否"}`);
+  }
+
+  const infos = data.balance_infos;
+  if (Array.isArray(infos)) {
+    for (const item of infos) {
+      if (!isRecord(item)) {
+        continue;
+      }
+      const currency =
+        typeof item.currency === "string" && item.currency.trim() !== ""
+          ? item.currency.trim()
+          : "未知币种";
+      const parts: string[] = [currency];
+      if (typeof item.total_balance === "string") {
+        parts.push(`总额 ${item.total_balance}`);
+      }
+      if (typeof item.granted_balance === "string") {
+        parts.push(`赠送 ${item.granted_balance}`);
+      }
+      if (typeof item.topped_up_balance === "string") {
+        parts.push(`充值 ${item.topped_up_balance}`);
+      }
+      if (parts.length > 1) {
+        lines.push(parts.join(" · "));
+      }
+    }
+  }
+
+  if (lines.length === 1) {
+    fail("DeepSeek 余额响应无法解析为可用摘要");
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function formatBalanceNumber(value: unknown): string | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    return value.trim();
+  }
+  return undefined;
+}
+
+function summarizeKimiBalance(data: Record<string, unknown>): string {
+  const lines: string[] = ["Kimi 账户余额"];
+  const available = formatBalanceNumber(data.available_balance);
+  const voucher = formatBalanceNumber(data.voucher_balance);
+  const cash = formatBalanceNumber(data.cash_balance);
+  if (available !== undefined) {
+    lines.push(`可用余额: ${available}`);
+  }
+  if (voucher !== undefined) {
+    lines.push(`代金券: ${voucher}`);
+  }
+  if (cash !== undefined) {
+    lines.push(`现金: ${cash}`);
+  }
+  if (lines.length === 1) {
+    fail("Kimi 余额响应无法解析为可用摘要");
   }
   return `${lines.join("\n")}\n`;
 }
@@ -164,28 +242,214 @@ async function runBlTokenPlanUsage(): Promise<Record<string, unknown>> {
   return parsed;
 }
 
+function resolveBalanceProfile(
+  platform: "deepseek" | "kimi",
+  nameFlag: string | undefined,
+): TokenProfile {
+  const label = platform === "deepseek" ? "DeepSeek" : "Kimi";
+  if (nameFlag !== undefined && nameFlag !== "") {
+    const profile = getProfile(nameFlag);
+    if (profile.platform !== platform) {
+      fail(
+        `profile "${nameFlag}" 的平台是 ${profile.platform}，${label} 余额查询需要 ${platform} profile`,
+      );
+    }
+    return profile;
+  }
+
+  const { profiles } = loadProfiles();
+  const names = Object.keys(profiles).filter(
+    (name) => profiles[name]?.platform === platform,
+  );
+  if (names.length === 0) {
+    fail(
+      `没有 ${platform} profile 可查询余额；请先 token add --platform ${platform}，或用 --name 指定`,
+    );
+  }
+  if (names.length > 1) {
+    fail(
+      `有多套 ${platform} profile（${names.join(", ")}）；请用 --name 指定`,
+    );
+  }
+  const only = profiles[names[0]!];
+  if (only === undefined) {
+    fail(`没有 ${platform} profile 可查询余额`);
+  }
+  return only;
+}
+
+function joinBalancePath(baseUrl: string, suffix: string): string | undefined {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  if (trimmed === "") {
+    return undefined;
+  }
+  try {
+    new URL(trimmed);
+  } catch {
+    return undefined;
+  }
+  return `${trimmed}${suffix}`;
+}
+
+type BalanceFetch = (
+  input: string,
+  init: {
+    method: string;
+    headers: Record<string, string>;
+    signal: AbortSignal;
+  },
+) => Promise<{
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+}>;
+
+async function defaultBalanceFetch(
+  input: string,
+  init: {
+    method: string;
+    headers: Record<string, string>;
+    signal: AbortSignal;
+  },
+): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> {
+  const response = await fetch(input, init);
+  return {
+    ok: response.ok,
+    status: response.status,
+    json: () => response.json() as Promise<unknown>,
+  };
+}
+
+let balanceFetch: BalanceFetch = defaultBalanceFetch;
+
+/** Test hook for balance HTTP (DeepSeek / Kimi). */
+export function setDeepseekBalanceFetch(
+  fn: BalanceFetch | undefined,
+): void {
+  balanceFetch = fn ?? defaultBalanceFetch;
+}
+
+export function setKimiBalanceFetch(fn: BalanceFetch | undefined): void {
+  balanceFetch = fn ?? defaultBalanceFetch;
+}
+
+async function fetchBalanceJson(
+  url: string,
+  token: string,
+  label: string,
+): Promise<Record<string, unknown>> {
+  let response: { ok: boolean; status: number; json: () => Promise<unknown> };
+  try {
+    response = await balanceFetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    fail(`GET ${url} 失败`);
+  }
+
+  if (!response.ok) {
+    fail(`GET ${url} 失败: HTTP ${response.status}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    fail(`无法解析 ${label} 余额响应为 JSON`);
+  }
+
+  if (!isRecord(parsed)) {
+    fail(`${label} 余额响应根节点必须是对象`);
+  }
+
+  return parsed;
+}
+
+async function runDeepseekBalance(
+  profile: TokenProfile,
+): Promise<Record<string, unknown>> {
+  const url = joinBalancePath(profile.baseUrl, "/user/balance");
+  if (url === undefined) {
+    fail("DeepSeek profile 的 baseUrl 无效");
+  }
+  return fetchBalanceJson(url, profile.token, "DeepSeek");
+}
+
+async function runKimiBalance(
+  profile: TokenProfile,
+): Promise<Record<string, unknown>> {
+  const url = joinBalancePath(profile.baseUrl, "/users/me/balance");
+  if (url === undefined) {
+    fail("Kimi profile 的 baseUrl 无效");
+  }
+  const parsed = await fetchBalanceJson(url, profile.token, "Kimi");
+
+  if (parsed.status === false) {
+    fail("Kimi 余额查询失败（status=false）");
+  }
+  if (parsed.code !== undefined && parsed.code !== 0) {
+    fail(`Kimi 余额查询失败（code=${String(parsed.code)}）`);
+  }
+  if (!isRecord(parsed.data)) {
+    fail("Kimi 余额响应缺少 data 对象");
+  }
+  return parsed.data;
+}
+
 export async function runTokenUsage(args: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args,
     options: {
       platform: { type: "string" },
+      name: { type: "string" },
     },
     allowPositionals: true,
   });
 
   if (positionals.length > 0) {
-    fail("用法: agent-cli token usage [--platform aliyun]");
+    fail(usageHelp);
   }
 
   const platformRaw = values.platform?.trim() || "aliyun";
   if (!isUsagePlatform(platformRaw)) {
-    fail(`未知平台: ${platformRaw}（当前仅支持 aliyun）`);
+    fail(`未知平台: ${platformRaw}（当前支持 aliyun、deepseek、kimi）`);
   }
   if (platformRaw === "tencent") {
-    fail("暂不支持腾讯云套餐余量查询（当前仅支持阿里云百炼）");
+    fail(
+      "暂不支持腾讯云套餐余量查询（当前支持阿里云百炼、DeepSeek 与 Kimi）",
+    );
   }
 
-  const data = await runBlTokenPlanUsage();
-  process.stdout.write(summarizeUsage(data));
+  const nameFlag = values.name?.trim();
+  const nameProvided = nameFlag !== undefined && nameFlag !== "";
+
+  if (platformRaw === "aliyun") {
+    if (nameProvided) {
+      fail("阿里云余量查询不支持 --name（不绑定 token profile）");
+    }
+    const data = await runBlTokenPlanUsage();
+    process.stdout.write(summarizeAliyunUsage(data));
+    return 0;
+  }
+
+  const balancePlatform = platformRaw as Extract<Platform, "deepseek" | "kimi">;
+  const profile = resolveBalanceProfile(
+    balancePlatform,
+    nameProvided ? nameFlag : undefined,
+  );
+
+  if (balancePlatform === "deepseek") {
+    const data = await runDeepseekBalance(profile);
+    process.stdout.write(summarizeDeepseekBalance(data));
+    return 0;
+  }
+
+  const data = await runKimiBalance(profile);
+  process.stdout.write(summarizeKimiBalance(data));
   return 0;
 }

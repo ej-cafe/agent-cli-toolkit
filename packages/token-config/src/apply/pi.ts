@@ -61,7 +61,7 @@ function upsertModels(
 export function applyPi(
   name: string,
   profile: TokenProfile,
-  modelId?: string,
+  modelId: string,
 ): void {
   const modelsPath = piModelsPath();
   const authPath = piAuthPath();
@@ -69,8 +69,7 @@ export function applyPi(
 
   const modelsRoot = readJsonObject(modelsPath) ?? {};
   const authRoot = readJsonObject(authPath) ?? {};
-  const settingsRoot =
-    modelId !== undefined ? (readJsonObject(settingsPath) ?? {}) : undefined;
+  const settingsRoot = readJsonObject(settingsPath) ?? {};
 
   const providersValue = modelsRoot.providers;
   if (providersValue !== undefined && !isRecord(providersValue)) {
@@ -109,11 +108,9 @@ export function applyPi(
   writeJsonAtomic(authPath, nextAuth);
   chmodSync(authPath, 0o600);
 
-  if (modelId !== undefined && settingsRoot !== undefined) {
-    writeJsonAtomic(settingsPath, {
-      ...settingsRoot,
-      defaultProvider: name,
-      defaultModel: modelId,
-    });
-  }
+  writeJsonAtomic(settingsPath, {
+    ...settingsRoot,
+    defaultProvider: name,
+    defaultModel: modelId,
+  });
 }
