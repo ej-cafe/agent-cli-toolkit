@@ -17,8 +17,8 @@ export function printTokenUsage(): void {
   （--model 对 Claude Code、dsh 与 pi 有效；应用到 pi 时总会设置 defaultProvider（profile 名称）与 defaultModel，有 --model 用该 id，否则用模型列表第一项）
   agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
   （省略 --name 时同步全部目标 profile；--platform 仅过滤；每个目标用自己的 {baseUrl}/models）
-  agent-cli token usage [--platform aliyun|deepseek|kimi] [--name <profile>]
-  （aliyun 默认：百炼 Token Plan，需 bl auth login --console；deepseek / kimi：账户余额，用对应 profile，可用 --name）
+  agent-cli token usage [--name <profile>] [--output table|text|raw]
+  （按 profile 分段展示余量，段间空行；省略 --name 查全部；--output 默认 table）
 `);
 }
 

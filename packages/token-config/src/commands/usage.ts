@@ -1,25 +1,57 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
-import { fail } from "../errors.js";
+import { TokenConfigError, fail } from "../errors.js";
 import { isRecord } from "../json-file.js";
 import { getProfile, loadProfiles } from "../store.js";
-import type { Platform, TokenProfile } from "../types.js";
+import type { TokenProfile } from "../types.js";
 
 const execFileAsync = promisify(execFile);
 
 const usageHelp =
-  "用法: agent-cli token usage [--platform aliyun|deepseek|kimi] [--name <profile>]";
+  "用法: agent-cli token usage [--name <profile>] [--output table|text|raw]";
 
-type UsagePlatform = "aliyun" | "tencent" | "deepseek" | "kimi";
+type OutputFormat = "table" | "text" | "raw";
 
-function isUsagePlatform(value: string): value is UsagePlatform {
-  return (
-    value === "aliyun" ||
-    value === "tencent" ||
-    value === "deepseek" ||
-    value === "kimi"
-  );
+function isOutputFormat(value: string): value is OutputFormat {
+  return value === "table" || value === "text" || value === "raw";
+}
+
+function displayWidth(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    width += code > 0x7f ? 2 : 1;
+  }
+  return width;
+}
+
+function padCell(text: string, width: number): string {
+  const pad = Math.max(0, width - displayWidth(text));
+  return `${text}${" ".repeat(pad)}`;
+}
+
+function formatTable(headers: string[], rows: string[][]): string {
+  const widths = headers.map((header, index) => {
+    let max = displayWidth(header);
+    for (const row of rows) {
+      max = Math.max(max, displayWidth(row[index] ?? "-"));
+    }
+    return max;
+  });
+  const lines = [
+    headers.map((header, index) => padCell(header, widths[index]!)).join("  "),
+    ...rows.map((row) =>
+      headers
+        .map((_, index) => padCell(row[index] ?? "-", widths[index]!))
+        .join("  "),
+    ),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+function cell(value: string | undefined): string {
+  return value !== undefined && value !== "" ? value : "-";
 }
 
 function formatPercent(fraction: number): string {
@@ -50,6 +82,32 @@ function formatWindow(
   return parts.join(" · ");
 }
 
+function aliyunWindowRows(
+  data: Record<string, unknown>,
+): Array<{ label: string; used: string; reset: string }> {
+  const rows: Array<{ label: string; used: string; reset: string }> = [];
+  const push = (
+    label: string,
+    percentage: unknown,
+    resetTime: unknown,
+  ): void => {
+    if (typeof percentage !== "number" || !Number.isFinite(percentage)) {
+      return;
+    }
+    rows.push({
+      label,
+      used: formatPercent(percentage),
+      reset:
+        typeof resetTime === "number" && Number.isFinite(resetTime)
+          ? formatResetTime(resetTime)
+          : "-",
+    });
+  };
+  push("5 小时窗口", data.per5HourPercentage, data.per5HourResetTime);
+  push("7 天窗口", data.per1WeekPercentage, data.per1WeekResetTime);
+  return rows;
+}
+
 function summarizeAliyunUsage(data: Record<string, unknown>): string {
   const lines: string[] = ["阿里云百炼 Token Plan 余量"];
   const fiveHour = formatWindow(
@@ -72,6 +130,20 @@ function summarizeAliyunUsage(data: Record<string, unknown>): string {
     lines.push(JSON.stringify(data, null, 2));
   }
   return `${lines.join("\n")}\n`;
+}
+
+function tabulateAliyunUsage(data: Record<string, unknown>): string {
+  const rows = aliyunWindowRows(data);
+  if (rows.length === 0) {
+    return formatTable(
+      ["窗口", "已用", "重置时间"],
+      [["-", "-", "-"]],
+    );
+  }
+  return formatTable(
+    ["窗口", "已用", "重置时间"],
+    rows.map((row) => [row.label, row.used, row.reset]),
+  );
 }
 
 function summarizeDeepseekBalance(data: Record<string, unknown>): string {
@@ -112,6 +184,53 @@ function summarizeDeepseekBalance(data: Record<string, unknown>): string {
   return `${lines.join("\n")}\n`;
 }
 
+function tabulateDeepseekBalance(data: Record<string, unknown>): string {
+  const lines: string[] = [];
+  if (typeof data.is_available === "boolean") {
+    lines.push(`可用: ${data.is_available ? "是" : "否"}`);
+  }
+
+  const tableRows: string[][] = [];
+  const infos = data.balance_infos;
+  if (Array.isArray(infos)) {
+    for (const item of infos) {
+      if (!isRecord(item)) {
+        continue;
+      }
+      const currency =
+        typeof item.currency === "string" && item.currency.trim() !== ""
+          ? item.currency.trim()
+          : "未知币种";
+      tableRows.push([
+        currency,
+        cell(typeof item.total_balance === "string" ? item.total_balance : undefined),
+        cell(
+          typeof item.granted_balance === "string"
+            ? item.granted_balance
+            : undefined,
+        ),
+        cell(
+          typeof item.topped_up_balance === "string"
+            ? item.topped_up_balance
+            : undefined,
+        ),
+      ]);
+    }
+  }
+
+  if (tableRows.length === 0 && lines.length === 0) {
+    fail("DeepSeek 余额响应无法解析为可用摘要");
+  }
+  if (tableRows.length === 0) {
+    tableRows.push(["-", "-", "-", "-"]);
+  }
+
+  lines.push(
+    formatTable(["币种", "总额", "赠送", "充值"], tableRows).trimEnd(),
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 function formatBalanceNumber(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return String(value);
@@ -120,6 +239,13 @@ function formatBalanceNumber(value: unknown): string | undefined {
     return value.trim();
   }
   return undefined;
+}
+
+function kimiDataFromRoot(root: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(root.data)) {
+    fail("Kimi 余额响应缺少 data 对象");
+  }
+  return root.data;
 }
 
 function summarizeKimiBalance(data: Record<string, unknown>): string {
@@ -140,6 +266,54 @@ function summarizeKimiBalance(data: Record<string, unknown>): string {
     fail("Kimi 余额响应无法解析为可用摘要");
   }
   return `${lines.join("\n")}\n`;
+}
+
+function tabulateKimiBalance(data: Record<string, unknown>): string {
+  const rows: string[][] = [];
+  const available = formatBalanceNumber(data.available_balance);
+  const voucher = formatBalanceNumber(data.voucher_balance);
+  const cash = formatBalanceNumber(data.cash_balance);
+  if (available !== undefined) {
+    rows.push(["可用余额", available]);
+  }
+  if (voucher !== undefined) {
+    rows.push(["代金券", voucher]);
+  }
+  if (cash !== undefined) {
+    rows.push(["现金", cash]);
+  }
+  if (rows.length === 0) {
+    fail("Kimi 余额响应无法解析为可用摘要");
+  }
+  return formatTable(["项目", "金额"], rows);
+}
+
+function formatRaw(data: Record<string, unknown>): string {
+  return `${JSON.stringify(data, null, 2)}\n`;
+}
+
+function formatBody(
+  platform: "aliyun" | "deepseek" | "kimi",
+  raw: Record<string, unknown>,
+  output: OutputFormat,
+): string {
+  if (output === "raw") {
+    return formatRaw(raw);
+  }
+  if (platform === "aliyun") {
+    return output === "table"
+      ? tabulateAliyunUsage(raw)
+      : summarizeAliyunUsage(raw);
+  }
+  if (platform === "deepseek") {
+    return output === "table"
+      ? tabulateDeepseekBalance(raw)
+      : summarizeDeepseekBalance(raw);
+  }
+  const data = kimiDataFromRoot(raw);
+  return output === "table"
+    ? tabulateKimiBalance(data)
+    : summarizeKimiBalance(data);
 }
 
 function failFromBlError(payload: unknown, fallback: string): never {
@@ -240,42 +414,6 @@ async function runBlTokenPlanUsage(): Promise<Record<string, unknown>> {
   }
 
   return parsed;
-}
-
-function resolveBalanceProfile(
-  platform: "deepseek" | "kimi",
-  nameFlag: string | undefined,
-): TokenProfile {
-  const label = platform === "deepseek" ? "DeepSeek" : "Kimi";
-  if (nameFlag !== undefined && nameFlag !== "") {
-    const profile = getProfile(nameFlag);
-    if (profile.platform !== platform) {
-      fail(
-        `profile "${nameFlag}" 的平台是 ${profile.platform}，${label} 余额查询需要 ${platform} profile`,
-      );
-    }
-    return profile;
-  }
-
-  const { profiles } = loadProfiles();
-  const names = Object.keys(profiles).filter(
-    (name) => profiles[name]?.platform === platform,
-  );
-  if (names.length === 0) {
-    fail(
-      `没有 ${platform} profile 可查询余额；请先 token add --platform ${platform}，或用 --name 指定`,
-    );
-  }
-  if (names.length > 1) {
-    fail(
-      `有多套 ${platform} profile（${names.join(", ")}）；请用 --name 指定`,
-    );
-  }
-  const only = profiles[names[0]!];
-  if (only === undefined) {
-    fail(`没有 ${platform} profile 可查询余额`);
-  }
-  return only;
 }
 
 function joinBalancePath(baseUrl: string, suffix: string): string | undefined {
@@ -398,7 +536,51 @@ async function runKimiBalance(
   if (!isRecord(parsed.data)) {
     fail("Kimi 余额响应缺少 data 对象");
   }
-  return parsed.data;
+  return parsed;
+}
+
+function withProfileHeader(
+  name: string,
+  platform: string,
+  body: string,
+): string {
+  return `${name} (${platform})\n${body}`;
+}
+
+async function queryProfile(
+  name: string,
+  profile: TokenProfile,
+  output: OutputFormat,
+  aliyun: { promise?: Promise<Record<string, unknown>> },
+): Promise<string> {
+  if (profile.platform === "deepseek") {
+    const data = await runDeepseekBalance(profile);
+    return withProfileHeader(
+      name,
+      profile.platform,
+      formatBody("deepseek", data, output),
+    );
+  }
+  if (profile.platform === "kimi") {
+    const data = await runKimiBalance(profile);
+    return withProfileHeader(
+      name,
+      profile.platform,
+      formatBody("kimi", data, output),
+    );
+  }
+  if (profile.platform === "aliyun") {
+    if (aliyun.promise === undefined) {
+      aliyun.promise = runBlTokenPlanUsage();
+    }
+    const data = await aliyun.promise;
+    return withProfileHeader(
+      name,
+      profile.platform,
+      formatBody("aliyun", data, output),
+    );
+  }
+  fail("暂不支持腾讯云套餐余量查询\n");
 }
 
 export async function runTokenUsage(args: string[]): Promise<number> {
@@ -407,6 +589,7 @@ export async function runTokenUsage(args: string[]): Promise<number> {
     options: {
       platform: { type: "string" },
       name: { type: "string" },
+      output: { type: "string" },
     },
     allowPositionals: true,
   });
@@ -415,41 +598,53 @@ export async function runTokenUsage(args: string[]): Promise<number> {
     fail(usageHelp);
   }
 
-  const platformRaw = values.platform?.trim() || "aliyun";
-  if (!isUsagePlatform(platformRaw)) {
-    fail(`未知平台: ${platformRaw}（当前支持 aliyun、deepseek、kimi）`);
+  if (values.platform !== undefined) {
+    fail("token usage 已取消 --platform；请按 profile 查询，可用 --name 指定");
   }
-  if (platformRaw === "tencent") {
-    fail(
-      "暂不支持腾讯云套餐余量查询（当前支持阿里云百炼、DeepSeek 与 Kimi）",
-    );
+
+  const outputRaw = values.output?.trim() || "table";
+  if (!isOutputFormat(outputRaw)) {
+    fail(`未知 --output: ${outputRaw}（支持 table、text、raw）`);
   }
 
   const nameFlag = values.name?.trim();
-  const nameProvided = nameFlag !== undefined && nameFlag !== "";
+  const { profiles } = loadProfiles();
 
-  if (platformRaw === "aliyun") {
-    if (nameProvided) {
-      fail("阿里云余量查询不支持 --name（不绑定 token profile）");
+  let targets: string[];
+  if (nameFlag !== undefined && nameFlag !== "") {
+    getProfile(nameFlag);
+    targets = [nameFlag];
+  } else if (Object.keys(profiles).length === 0) {
+    process.stdout.write("暂无 profile\n");
+    return 0;
+  } else {
+    targets = Object.keys(profiles).sort((a, b) => a.localeCompare(b));
+  }
+
+  const aliyun: { promise?: Promise<Record<string, unknown>> } = {};
+  const chunks: string[] = [];
+  let failures = 0;
+
+  for (const name of targets) {
+    const profile = profiles[name];
+    if (profile === undefined) {
+      process.stderr.write(`${name}: profile 不存在\n`);
+      failures += 1;
+      continue;
     }
-    const data = await runBlTokenPlanUsage();
-    process.stdout.write(summarizeAliyunUsage(data));
-    return 0;
+    try {
+      chunks.push(await queryProfile(name, profile, outputRaw, aliyun));
+    } catch (error) {
+      if (!(error instanceof TokenConfigError)) {
+        throw error;
+      }
+      process.stderr.write(`${name}: ${error.message}\n`);
+      failures += 1;
+    }
   }
 
-  const balancePlatform = platformRaw as Extract<Platform, "deepseek" | "kimi">;
-  const profile = resolveBalanceProfile(
-    balancePlatform,
-    nameProvided ? nameFlag : undefined,
-  );
-
-  if (balancePlatform === "deepseek") {
-    const data = await runDeepseekBalance(profile);
-    process.stdout.write(summarizeDeepseekBalance(data));
-    return 0;
+  if (chunks.length > 0) {
+    process.stdout.write(chunks.join("\n"));
   }
-
-  const data = await runKimiBalance(profile);
-  process.stdout.write(summarizeKimiBalance(data));
-  return 0;
+  return failures > 0 && chunks.length === 0 ? 1 : 0;
 }
