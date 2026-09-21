@@ -1,45 +1,288 @@
 # agent-cli-toolkit
 
-TypeScript 命令行工具集，运行在 Node.js 上，使用 pnpm monorepo。用于构建与管理 AI 代理应用，规划支持插件扩展与多环境部署。
+TypeScript 命令行工具集，运行在 Node.js 上，使用 pnpm monorepo。当前主要能力是管理云平台 API token profile，并把它们同步到 Claude Code、OpenCode、DeepSeek Harness（dsh）、pi 等代理工具的本地配置。
+
+对外命令：`agent-cli`。
 
 ## 要求
 
 - Node.js >= 20
 - pnpm 12（见根目录 `packageManager`）
 
-## 使用
+## 安装与运行
+
+从 npm 安装（公开包 `agent-cli-toolkit`）：
+
+```bash
+npm install -g agent-cli-toolkit
+agent-cli --help
+```
+
+从源码构建：
 
 ```bash
 pnpm install
 pnpm build
 pnpm exec agent-cli --help
-pnpm --filter @agent-cli-toolkit/cli dev
+pnpm --filter @agent-cli-toolkit/cli dev   # 用 tsx 跑源码
 ```
 
-对外命令：`agent-cli`。首次运行会创建 `~/.config/agent-cli-toolkit`（若设置了 `XDG_CONFIG_HOME`，则为 `$XDG_CONFIG_HOME/agent-cli-toolkit`），全局配置统一存放于此。token profile（含各自的模型列表）保存在该目录下的 `token-profile.json`。
+全局标志：
+
+| 标志 | 说明 |
+|------|------|
+| `--help` | 打印帮助 |
+| `--version` | 打印版本 |
+
+## 配置目录
+
+首次运行会创建全局配置目录：
+
+- 默认：`~/.config/agent-cli-toolkit`
+- 若设置了 `XDG_CONFIG_HOME`：`$XDG_CONFIG_HOME/agent-cli-toolkit`
+
+token profile（含各自的模型列表）保存在该目录下的 `token-profile.json`。
+
+## 命令总览
 
 ```bash
-agent-cli token add
-agent-cli token add --name <name> --platform <aliyun|tencent|deepseek|kimi> --token <token> [--base-url <url>] [--claude-base-url <url>]
+agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
 agent-cli token delete <name>
 agent-cli token list
-agent-cli token use <name> --all
-agent-cli token use <name> --tool claude-code --model <id>
-agent-cli token use <name> --tool dsh --model <id>
-agent-cli token use <name> --tool pi --model <id>
-agent-cli token use <name> --tool claude-code --tool opencode --tool dsh --tool pi
-agent-cli token sync-model-list
-agent-cli token sync-model-list --name <profile>
-agent-cli token sync-model-list --platform aliyun
-agent-cli token sync-model-list --platform deepseek
-agent-cli token sync-model-list --platform kimi
-agent-cli token usage
-agent-cli token usage --name <profile>
-agent-cli token usage --output text
-agent-cli token usage --output raw
+agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token usage [--name <profile>] [--output table|text|raw]
 ```
 
-`token add` 可省略标志，在交互式终端问答补齐缺失字段；添加时会用该套凭据请求 `{baseUrl}/models`，失败则不写入 profile。`--platform deepseek` 时可省略 `--base-url` / `--claude-base-url`，默认分别为 `https://api.deepseek.com` 与 `https://api.deepseek.com/anthropic`，显式传入则覆盖。`--platform kimi` 时可省略 URL，默认分别为 `https://api.moonshot.cn/v1` 与 `https://api.moonshot.cn/anthropic`（国际站可覆盖为 `api.moonshot.ai`）。`aliyun` / `tencent` 仍需提供 `--base-url`。`token list` 列出已保存的 profile，token 会脱敏。`token use` 可将当前 profile 写入 Claude Code（`~/.claude/settings.json` 的 `env`）、OpenCode（`~/.config/opencode/opencode.json` 中以 profile 名称为键的 provider）、DeepSeek Harness（`$DSH_HOME/settings.yaml` 的 `llm-pi-ai.providers.<name>`，默认 `$DSH_HOME` 为 `~/.dsh`）和 pi（`$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`，默认 `~/.pi/agent`）。应用到 pi 时会设置 `defaultProvider`（profile 名称）与 `defaultModel`：有 `--model` 时用该 id，否则用该 profile 模型列表第一项。`--model` 对 Claude Code 与 dsh 仍仅在传入时写入默认模型（分别是 `env.ANTHROPIC_MODEL` 与顶层 `agent-default-model`）。未指定 `--all` 或 `--tool` 时，会在命令行选择目标工具。`token sync-model-list` 按 profile 更新模型列表：可指定 `--name`，可按 `--platform` 过滤，省略 `--name` 则同步全部目标；每个目标用自己的 `{baseUrl}/models`。`token usage` 按已保存 profile 分段查询套餐余量或账户余额并展示，成功段之间以空行分隔；省略 `--name` 时查询全部 profile，可用 `--name` 指定单套。`--output` 可取 `table`（默认，命令行表格）、`text`（文本摘要）或 `raw`（原始 JSON 响应）。deepseek 查询账户余额（`GET {baseUrl}/user/balance`），kimi 查询账户余额（`GET {baseUrl}/users/me/balance`），aliyun 用本机 `bl` 查询百炼 Token Plan（需 `bl auth login --console`，不读 profile API Key），tencent 暂不支持。`--token` 可能出现在 shell 历史中，请谨慎使用。
+---
+
+## `token add`
+
+添加一套云平台 token profile。添加时会用该套凭据请求 `{baseUrl}/models` 拉取模型列表；请求失败则**不会**写入 profile。
+
+### 用法
+
+```bash
+# 交互式：省略标志，在终端问答补齐
+agent-cli token add
+
+# 一次性写全参数
+agent-cli token add \
+  --name <name> \
+  --platform <aliyun|tencent|deepseek|kimi> \
+  --token <token> \
+  [--base-url <url>] \
+  [--claude-base-url <url>]
+```
+
+### 标志
+
+| 标志 | 必填 | 说明 |
+|------|------|------|
+| `--name` | 是 | profile 名称（本地唯一键） |
+| `--platform` | 是 | `aliyun`、`tencent`、`deepseek`、`kimi` |
+| `--token` | 是 | API token（可能进入 shell 历史，请谨慎） |
+| `--base-url` | 视平台 | OpenAI 兼容 API 根地址 |
+| `--claude-base-url` | 否 | Anthropic 兼容 API 根地址 |
+
+非交互环境（stdin 非 TTY）下，缺失必填项会直接报错，不会进入问答。
+
+### 平台与默认 URL
+
+| 平台 | `--base-url` | `--claude-base-url` |
+|------|--------------|---------------------|
+| `aliyun` / `tencent` | **必填** | 可选 |
+| `deepseek` | 可省略，默认 `https://api.deepseek.com` | 可省略，默认 `https://api.deepseek.com/anthropic` |
+| `kimi` | 可省略，默认 `https://api.moonshot.cn/v1`（中国站） | 可省略，默认 `https://api.moonshot.cn/anthropic` |
+
+显式传入的 URL 会覆盖预设。Kimi 国际站可将 URL 覆盖为 `api.moonshot.ai` 对应地址。
+
+交互模式下，`deepseek` / `kimi` 的 base-url 与 claude-base-url 可直接回车使用预设；`aliyun` / `tencent` 必须填写 base-url。
+
+### 示例
+
+```bash
+agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+agent-cli token add \
+  --name bailian \
+  --platform aliyun \
+  --token sk-xxx \
+  --base-url https://dashscope.aliyuncs.com/compatible-mode/v1 \
+  --claude-base-url https://dashscope.aliyuncs.com/apps/anthropic
+```
+
+---
+
+## `token delete`
+
+按名称删除已保存的 profile。
+
+### 用法
+
+```bash
+agent-cli token delete <name>
+```
+
+`<name>` 为必填位置参数；成功后打印 `已删除 profile: <name>`。
+
+### 示例
+
+```bash
+agent-cli token delete ds
+```
+
+---
+
+## `token list`
+
+列出已保存的全部 profile。token 会脱敏（过短则显示 `****`，否则保留首尾各 4 位）。
+
+### 用法
+
+```bash
+agent-cli token list
+```
+
+无 profile 时输出 `暂无 profile`。有数据时每个 profile 输出：
+
+- `platform`
+- `baseUrl`
+- `claudeBaseUrl`（若有）
+- `token`（脱敏）
+- `models`（模型条数）
+
+---
+
+## `token use`
+
+把指定 profile 写入一个或多个本地代理工具的配置文件。
+
+### 用法
+
+```bash
+agent-cli token use <name> [--all | --tool <id>] [--model <id>]
+```
+
+| 标志 | 说明 |
+|------|------|
+| `--all` | 同步到全部已对接工具 |
+| `--tool` | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi` |
+| `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中） |
+
+未指定 `--all` 或 `--tool` 时，会在交互终端选择目标工具（编号或 id，逗号/空格分隔）。`--model` 仅对 `claude-code`、`dsh`、`pi` 有效；若目标只有 `opencode` 并传了 `--model`，会报错。
+
+### 各工具写入位置与行为
+
+| `--tool` | 配置路径 | 行为摘要 |
+|----------|----------|----------|
+| `claude-code` | `~/.claude/settings.json` 的 `env` | 写入 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`；有 `--model` 时写入 `ANTHROPIC_MODEL` |
+| `opencode` | `~/.config/opencode/opencode.json`（或 `$XDG_CONFIG_HOME/opencode/opencode.json`） | 以 profile 名称为键写入 `provider`，含模型列表；`--model` 对其无效 |
+| `dsh` | `$DSH_HOME/settings.yaml`（默认 `$DSH_HOME` 为 `~/.dsh`），以及同目录 `.credentials.yaml` | 写入 `llm-pi-ai.providers.<name>`；有 `--model` 时写入顶层 `agent-default-model` |
+| `pi` | `$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`（默认 `~/.pi/agent`） | 总会设置 `defaultProvider`（profile 名）与 `defaultModel`：有 `--model` 用该 id，否则用模型列表第一项 |
+
+### 示例
+
+```bash
+# 同步到全部工具
+agent-cli token use ds --all
+
+# 只写 Claude Code，并指定默认模型
+agent-cli token use ds --tool claude-code --model deepseek-chat
+
+# 同时写多个工具
+agent-cli token use ds --tool claude-code --tool opencode --tool dsh --tool pi
+
+# 应用到 pi（无 --model 时用列表第一项作为 defaultModel）
+agent-cli token use ds --tool pi
+agent-cli token use ds --tool pi --model deepseek-chat
+```
+
+---
+
+## `token sync-model-list`
+
+按 profile 重新请求 `{baseUrl}/models` 并更新本地模型列表。每个目标 profile 用自己的 baseUrl，没有平台级共享目录。
+
+### 用法
+
+```bash
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+```
+
+| 标志 | 说明 |
+|------|------|
+| `--name` | 只同步指定 profile |
+| `--platform` | 过滤平台；与 `--name` 同时使用时，若 profile 平台不匹配会报错 |
+
+省略 `--name` 时同步全部匹配目标（可再按 `--platform` 过滤）。部分失败时：成功的会打印，失败的写到 stderr，退出码为 1。
+
+### 示例
+
+```bash
+agent-cli token sync-model-list
+agent-cli token sync-model-list --name ds
+agent-cli token sync-model-list --platform aliyun
+agent-cli token sync-model-list --platform kimi
+```
+
+---
+
+## `token usage`
+
+按已保存 profile 查询套餐余量或账户余额，并分段展示（成功段之间以空行分隔）。
+
+### 用法
+
+```bash
+agent-cli token usage [--name <profile>] [--output table|text|raw]
+```
+
+| 标志 | 说明 |
+|------|------|
+| `--name` | 只查指定 profile；省略则按名称排序查询全部 |
+| `--output` | `table`（默认，命令行表格）、`text`（文本摘要）、`raw`（原始 JSON） |
+
+不再支持 `--platform`；请按 profile 查询。
+
+### 各平台查询方式
+
+| 平台 | 数据来源 | 说明 |
+|------|----------|------|
+| `deepseek` | `GET {baseUrl}/user/balance` | 使用 profile 中的 API token |
+| `kimi` | `GET {baseUrl}/users/me/balance` | 使用 profile 中的 API token |
+| `aliyun` | 本机 `bl usage token-plan --output json` | 需已安装 bailian-cli（`bl` 在 PATH 中），并先执行 `bl auth login --console`；**不读** profile 里的 API Key |
+| `tencent` | — | 暂不支持 |
+
+多个 aliyun profile 只会实际调用一次 `bl`。某个 profile 失败时，错误写到 stderr，其它 profile 仍会继续；若全部失败则退出码为 1。
+
+### 示例
+
+```bash
+agent-cli token usage
+agent-cli token usage --name ds
+agent-cli token usage --output text
+agent-cli token usage --name kimi-cn --output raw
+```
+
+---
+
+## 典型工作流
+
+```bash
+# 1. 添加 DeepSeek profile（URL 可用预设）
+agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+# 2. 查看已保存内容
+agent-cli token list
+
+# 3. 同步到本机代理工具
+agent-cli token use ds --all --model deepseek-chat
+
+# 4. 之后刷新模型列表 / 查余额
+agent-cli token sync-model-list --name ds
+agent-cli token usage --name ds
+```
 
 ## 参与贡献
 
@@ -47,3 +290,5 @@ agent-cli token usage --output raw
 2. 新建功能分支
 3. 提交代码
 4. 新建 Pull Request
+
+远程仓库：Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`，默认分支 `master`。

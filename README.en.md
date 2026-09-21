@@ -1,22 +1,288 @@
 # agent-cli-toolkit
 
-A TypeScript CLI toolkit that runs on Node.js and is organized as a pnpm monorepo. It helps developers build and manage AI agent apps, with planned support for plugins and multi-environment deployment.
+A TypeScript CLI toolkit that runs on Node.js and is organized as a pnpm monorepo. Its main capability today is managing cloud-platform API token profiles and syncing them into local configs for agent tools such as Claude Code, OpenCode, DeepSeek Harness (dsh), and pi.
+
+Public command: `agent-cli`.
 
 ## Requirements
 
 - Node.js >= 20
 - pnpm 12 (see `packageManager` in the repo root)
 
-## Usage
+## Install and run
+
+Install the public npm package `agent-cli-toolkit`:
+
+```bash
+npm install -g agent-cli-toolkit
+agent-cli --help
+```
+
+Build from source:
 
 ```bash
 pnpm install
 pnpm build
 pnpm exec agent-cli --help
-pnpm --filter @agent-cli-toolkit/cli dev
+pnpm --filter @agent-cli-toolkit/cli dev   # run source with tsx
 ```
 
-The public command is `agent-cli`. The first run creates `~/.config/agent-cli-toolkit` (or `$XDG_CONFIG_HOME/agent-cli-toolkit` when `XDG_CONFIG_HOME` is set). Global configuration is stored there.
+Global flags:
+
+| Flag | Description |
+|------|-------------|
+| `--help` | Print help |
+| `--version` | Print version |
+
+## Config directory
+
+On first run, a global config directory is created:
+
+- Default: `~/.config/agent-cli-toolkit`
+- If `XDG_CONFIG_HOME` is set: `$XDG_CONFIG_HOME/agent-cli-toolkit`
+
+Token profiles (including each profile’s model list) are stored in `token-profile.json` under that directory.
+
+## Command overview
+
+```bash
+agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+agent-cli token delete <name>
+agent-cli token list
+agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token usage [--name <profile>] [--output table|text|raw]
+```
+
+---
+
+## `token add`
+
+Add a cloud-platform token profile. On add, the CLI requests `{baseUrl}/models` with those credentials to fetch the model list. If that request fails, the profile is **not** written.
+
+### Usage
+
+```bash
+# Interactive: omit flags and answer prompts in the terminal
+agent-cli token add
+
+# Pass all arguments at once
+agent-cli token add \
+  --name <name> \
+  --platform <aliyun|tencent|deepseek|kimi> \
+  --token <token> \
+  [--base-url <url>] \
+  [--claude-base-url <url>]
+```
+
+### Flags
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--name` | Yes | Profile name (local unique key) |
+| `--platform` | Yes | `aliyun`, `tencent`, `deepseek`, or `kimi` |
+| `--token` | Yes | API token (may appear in shell history; use with care) |
+| `--base-url` | Platform-dependent | OpenAI-compatible API root URL |
+| `--claude-base-url` | No | Anthropic-compatible API root URL |
+
+In non-interactive environments (stdin is not a TTY), missing required fields cause an immediate error; no prompts are shown.
+
+### Platforms and default URLs
+
+| Platform | `--base-url` | `--claude-base-url` |
+|----------|--------------|---------------------|
+| `aliyun` / `tencent` | **Required** | Optional |
+| `deepseek` | Optional; default `https://api.deepseek.com` | Optional; default `https://api.deepseek.com/anthropic` |
+| `kimi` | Optional; default `https://api.moonshot.cn/v1` (China endpoint) | Optional; default `https://api.moonshot.cn/anthropic` |
+
+Explicit URLs override the presets. For Kimi’s international endpoint, override with the corresponding `api.moonshot.ai` URLs.
+
+In interactive mode, you can press Enter to accept presets for `deepseek` / `kimi` base-url and claude-base-url; `aliyun` / `tencent` always require a base-url.
+
+### Examples
+
+```bash
+agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+agent-cli token add \
+  --name bailian \
+  --platform aliyun \
+  --token sk-xxx \
+  --base-url https://dashscope.aliyuncs.com/compatible-mode/v1 \
+  --claude-base-url https://dashscope.aliyuncs.com/apps/anthropic
+```
+
+---
+
+## `token delete`
+
+Delete a saved profile by name.
+
+### Usage
+
+```bash
+agent-cli token delete <name>
+```
+
+`<name>` is a required positional argument. On success the CLI prints `已删除 profile: <name>`.
+
+### Example
+
+```bash
+agent-cli token delete ds
+```
+
+---
+
+## `token list`
+
+List all saved profiles. Tokens are masked (short tokens become `****`; otherwise the first and last 4 characters are kept).
+
+### Usage
+
+```bash
+agent-cli token list
+```
+
+With no profiles, prints `暂无 profile`. Otherwise each profile includes:
+
+- `platform`
+- `baseUrl`
+- `claudeBaseUrl` (if set)
+- `token` (masked)
+- `models` (count)
+
+---
+
+## `token use`
+
+Write a profile into one or more local agent tool config files.
+
+### Usage
+
+```bash
+agent-cli token use <name> [--all | --tool <id>] [--model <id>]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Sync to all integrated tools |
+| `--tool` | Target tool; repeatable: `claude-code`, `opencode`, `dsh`, `pi` |
+| `--model` | Default model id (must exist in that profile’s model list) |
+
+If neither `--all` nor `--tool` is given, the CLI prompts for target tools (numbers or ids, comma/space separated). `--model` applies only to `claude-code`, `dsh`, and `pi`; passing `--model` when the only target is `opencode` is an error.
+
+### Tool destinations and behavior
+
+| `--tool` | Config path | Behavior |
+|----------|-------------|----------|
+| `claude-code` | `env` in `~/.claude/settings.json` | Sets `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL`; with `--model`, also sets `ANTHROPIC_MODEL` |
+| `opencode` | `~/.config/opencode/opencode.json` (or `$XDG_CONFIG_HOME/opencode/opencode.json`) | Upserts a `provider` entry keyed by profile name, including the model list; `--model` has no effect |
+| `dsh` | `$DSH_HOME/settings.yaml` (default `$DSH_HOME` is `~/.dsh`) and `.credentials.yaml` in the same directory | Writes `llm-pi-ai.providers.<name>`; with `--model`, also sets top-level `agent-default-model` |
+| `pi` | `models.json` / `auth.json` / `settings.json` under `$PI_CODING_AGENT_DIR` (default `~/.pi/agent`) | Always sets `defaultProvider` (profile name) and `defaultModel`: uses `--model` when given, otherwise the first model in the list |
+
+### Examples
+
+```bash
+# Sync to all tools
+agent-cli token use ds --all
+
+# Claude Code only, with a default model
+agent-cli token use ds --tool claude-code --model deepseek-chat
+
+# Multiple tools at once
+agent-cli token use ds --tool claude-code --tool opencode --tool dsh --tool pi
+
+# Apply to pi (without --model, uses the first list entry as defaultModel)
+agent-cli token use ds --tool pi
+agent-cli token use ds --tool pi --model deepseek-chat
+```
+
+---
+
+## `token sync-model-list`
+
+Re-request `{baseUrl}/models` for each target profile and update the local model list. Each profile uses its own baseUrl; there is no platform-wide shared catalog.
+
+### Usage
+
+```bash
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name` | Sync only this profile |
+| `--platform` | Filter by platform; when used with `--name`, mismatches are an error |
+
+Omit `--name` to sync all matching targets (optionally filtered by `--platform`). On partial failure, successes are printed, failures go to stderr, and the exit code is 1.
+
+### Examples
+
+```bash
+agent-cli token sync-model-list
+agent-cli token sync-model-list --name ds
+agent-cli token sync-model-list --platform aliyun
+agent-cli token sync-model-list --platform kimi
+```
+
+---
+
+## `token usage`
+
+Query plan quota or account balance for saved profiles, printed in sections (blank line between successful sections).
+
+### Usage
+
+```bash
+agent-cli token usage [--name <profile>] [--output table|text|raw]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name` | Query only this profile; omit to query all, sorted by name |
+| `--output` | `table` (default CLI table), `text` (text summary), or `raw` (raw JSON) |
+
+`--platform` is no longer supported; query by profile instead.
+
+### Per-platform data sources
+
+| Platform | Source | Notes |
+|----------|--------|-------|
+| `deepseek` | `GET {baseUrl}/user/balance` | Uses the profile API token |
+| `kimi` | `GET {baseUrl}/users/me/balance` | Uses the profile API token |
+| `aliyun` | Local `bl usage token-plan --output json` | Requires bailian-cli (`bl` on PATH) and `bl auth login --console` first; does **not** read the profile API key |
+| `tencent` | — | Not supported yet |
+
+Multiple aliyun profiles trigger only one `bl` call. If one profile fails, the error goes to stderr and others continue; if all fail, the exit code is 1.
+
+### Examples
+
+```bash
+agent-cli token usage
+agent-cli token usage --name ds
+agent-cli token usage --output text
+agent-cli token usage --name kimi-cn --output raw
+```
+
+---
+
+## Typical workflow
+
+```bash
+# 1. Add a DeepSeek profile (URLs can use presets)
+agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+# 2. Inspect saved profiles
+agent-cli token list
+
+# 3. Sync into local agent tools
+agent-cli token use ds --all --model deepseek-chat
+
+# 4. Later: refresh models / check balance
+agent-cli token sync-model-list --name ds
+agent-cli token usage --name ds
+```
 
 ## Contributing
 
@@ -24,3 +290,5 @@ The public command is `agent-cli`. The first run creates `~/.config/agent-cli-to
 2. Create a feature branch
 3. Commit your changes
 4. Open a Pull Request
+
+Remote: Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`, default branch `master`.
