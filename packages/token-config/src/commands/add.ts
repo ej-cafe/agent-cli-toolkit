@@ -1,34 +1,16 @@
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { fail } from "../errors.js";
-import { addProfile } from "../store.js";
 import {
-  DEEPSEEK_DEFAULT_BASE_URL,
-  DEEPSEEK_DEFAULT_CLAUDE_BASE_URL,
-  KIMI_DEFAULT_BASE_URL,
-  KIMI_DEFAULT_CLAUDE_BASE_URL,
-  type Platform,
-} from "../types.js";
+  getPlatformOrAlias,
+  listPlatforms,
+} from "../platforms/registry.js";
+import type { TokenPlatform } from "../platforms/platform.js";
+import { addProfile } from "../store.js";
 
 function nonempty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function parsePlatform(value: string): Platform {
-  if (value === "1" || value === "aliyun") {
-    return "aliyun";
-  }
-  if (value === "2" || value === "tencent") {
-    return "tencent";
-  }
-  if (value === "3" || value === "deepseek") {
-    return "deepseek";
-  }
-  if (value === "4" || value === "kimi") {
-    return "kimi";
-  }
-  fail(`未知平台: ${value}`);
 }
 
 function requireFlag(value: string | undefined, flag: string): string {
@@ -36,10 +18,6 @@ function requireFlag(value: string | undefined, flag: string): string {
     fail(`缺少必填标志: ${flag}`);
   }
   return value;
-}
-
-function usesUrlPresets(platform: Platform | undefined): boolean {
-  return platform === "deepseek" || platform === "kimi";
 }
 
 export async function runTokenAdd(args: string[]): Promise<number> {
@@ -56,17 +34,17 @@ export async function runTokenAdd(args: string[]): Promise<number> {
   });
 
   let name = nonempty(values.name);
-  let platform: Platform | undefined;
+  let platform: TokenPlatform | undefined;
   const platformFlag = nonempty(values.platform);
   if (platformFlag !== undefined) {
-    platform = parsePlatform(platformFlag);
+    platform = getPlatformOrAlias(platformFlag);
   }
   let token = nonempty(values.token);
   let baseUrl = nonempty(values["base-url"]);
   const claudeFlagProvided = values["claude-base-url"] !== undefined;
   let claudeBaseUrl = nonempty(values["claude-base-url"]);
 
-  const needsBaseUrl = !usesUrlPresets(platform);
+  const needsBaseUrl = platform?.presets === undefined;
   const missingRequired =
     name === undefined ||
     platform === undefined ||
@@ -76,9 +54,9 @@ export async function runTokenAdd(args: string[]): Promise<number> {
   if (missingRequired) {
     if (process.stdin.isTTY !== true) {
       requireFlag(name, "--name");
-      requireFlag(platform, "--platform");
+      requireFlag(platformFlag, "--platform");
       requireFlag(token, "--token");
-      if (!usesUrlPresets(platform)) {
+      if (platform?.presets === undefined) {
         requireFlag(baseUrl, "--base-url");
       }
     } else {
@@ -93,13 +71,14 @@ export async function runTokenAdd(args: string[]): Promise<number> {
         }
 
         if (platform === undefined) {
-          process.stdout.write(`选择平台（编号或 id）:
-  1) aliyun
-  2) tencent
-  3) deepseek
-  4) kimi
-`);
-          platform = parsePlatform(
+          process.stdout.write(
+            `选择平台（编号或 id）:\n${
+              listPlatforms()
+                .map((item, index) => `  ${index + 1}) ${item.id}`)
+                .join("\n")
+            }\n`,
+          );
+          platform = getPlatformOrAlias(
             requireFlag(nonempty(await rl.question("> ")), "--platform"),
           );
         }
@@ -109,7 +88,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
         }
 
         if (baseUrl === undefined) {
-          if (usesUrlPresets(platform)) {
+          if (platform.presets !== undefined) {
             baseUrl = nonempty(
               await rl.question("base-url（可选，回车用预设）: "),
             );
@@ -122,7 +101,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
         }
 
         if (!claudeFlagProvided) {
-          if (usesUrlPresets(platform)) {
+          if (platform.presets !== undefined) {
             claudeBaseUrl = nonempty(
               await rl.question("claude-base-url（可选，回车用预设）: "),
             );
@@ -138,21 +117,17 @@ export async function runTokenAdd(args: string[]): Promise<number> {
     }
   }
 
-  const resolvedPlatform = parsePlatform(
-    requireFlag(platform, "--platform"),
-  );
+  const resolvedPlatform: TokenPlatform =
+    platform ?? fail("缺少必填标志: --platform");
   const resolvedToken = requireFlag(token, "--token");
   const resolvedName = requireFlag(name, "--name");
 
+  const presets = resolvedPlatform.presets;
   let resolvedBaseUrl: string;
   let resolvedClaudeBaseUrl: string | undefined;
-  if (resolvedPlatform === "deepseek") {
-    resolvedBaseUrl = baseUrl ?? DEEPSEEK_DEFAULT_BASE_URL;
-    resolvedClaudeBaseUrl =
-      claudeBaseUrl ?? DEEPSEEK_DEFAULT_CLAUDE_BASE_URL;
-  } else if (resolvedPlatform === "kimi") {
-    resolvedBaseUrl = baseUrl ?? KIMI_DEFAULT_BASE_URL;
-    resolvedClaudeBaseUrl = claudeBaseUrl ?? KIMI_DEFAULT_CLAUDE_BASE_URL;
+  if (presets !== undefined) {
+    resolvedBaseUrl = baseUrl ?? presets.baseUrl;
+    resolvedClaudeBaseUrl = claudeBaseUrl ?? presets.claudeBaseUrl;
   } else {
     resolvedBaseUrl = requireFlag(baseUrl, "--base-url");
     resolvedClaudeBaseUrl = claudeBaseUrl;
@@ -160,7 +135,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
 
   await addProfile({
     name: resolvedName,
-    platform: resolvedPlatform,
+    platform: resolvedPlatform.id,
     token: resolvedToken,
     baseUrl: resolvedBaseUrl,
     ...(resolvedClaudeBaseUrl

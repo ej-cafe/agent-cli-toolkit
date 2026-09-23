@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fail } from "../errors.js";
 import { isRecord, readJsonObject, writeJsonAtomic } from "../json-file.js";
 import type { TokenProfile } from "../types.js";
+import { inspectTool } from "./presence.js";
 
 export function piAgentDir(): string {
   const fromEnv = process.env.PI_CODING_AGENT_DIR?.trim();
@@ -63,6 +64,9 @@ export function applyPi(
   profile: TokenProfile,
   modelId: string,
 ): void {
+  if (!inspectTool("pi").ok) {
+    return;
+  }
   const modelsPath = piModelsPath();
   const authPath = piAuthPath();
   const settingsPath = piSettingsPath();

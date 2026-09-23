@@ -4,6 +4,12 @@ import { applyClaudeCode } from "../apply/claude-code.js";
 import { applyDsh } from "../apply/dsh.js";
 import { applyOpenCode } from "../apply/opencode.js";
 import { applyPi } from "../apply/pi.js";
+import {
+  inspectTool,
+  skipMessage,
+  toolLabel,
+  type ToolAbsence,
+} from "../apply/presence.js";
 import { fail } from "../errors.js";
 import { getProfile } from "../store.js";
 import type { AgentTool, TokenProfile } from "../types.js";
@@ -27,7 +33,7 @@ async function promptTools(): Promise<AgentTool[]> {
   process.stdout.write(`选择要同步的工具（编号或 id，逗号/空格分隔）:
   1) claude-code
   2) opencode
-  3) dsh
+  3) DeepSeek Harness（dsh）
   4) pi
 `);
 
@@ -148,7 +154,7 @@ function resolveModel(
     !tools.includes("dsh") &&
     !tools.includes("pi")
   ) {
-    fail("--model 仅对 Claude Code、dsh 与 pi 有效");
+    fail("--model 仅对 Claude Code、DeepSeek Harness（dsh）与 pi 有效");
   }
   return modelId;
 }
@@ -176,10 +182,26 @@ export async function runTokenUse(args: string[]): Promise<number> {
   }
 
   const tools = await resolveTools(values.all === true, values.tool);
-  const modelId = resolveModel(name, values.model, tools);
-  applyTools(name, tools, modelId);
-  process.stdout.write(
-    `已将 profile ${name} 应用到: ${tools.join(", ")}\n`,
-  );
+  getProfile(name);
+  const ready: AgentTool[] = [];
+  const skipped: Array<{ tool: AgentTool; absence: ToolAbsence }> = [];
+  for (const tool of tools) {
+    const presence = inspectTool(tool);
+    if (presence.ok) {
+      ready.push(tool);
+    } else {
+      skipped.push({ tool, absence: presence.absence });
+    }
+  }
+  const modelId = resolveModel(name, values.model, ready);
+  applyTools(name, ready, modelId);
+  for (const item of skipped) {
+    process.stderr.write(`${skipMessage(item.tool, item.absence)}\n`);
+  }
+  if (ready.length > 0) {
+    process.stdout.write(
+      `已将 profile ${name} 应用到: ${ready.map(toolLabel).join(", ")}\n`,
+    );
+  }
   return 0;
 }

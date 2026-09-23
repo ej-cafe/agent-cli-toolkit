@@ -22,18 +22,19 @@ TypeScript CLI，运行在 Node.js 上，用 pnpm workspace 组织。用于构�
 pnpm install
 pnpm build
 pnpm typecheck
+pnpm test
 pnpm dev
 pnpm exec agent-cli --help
 pnpm --filter <package> <script>
 ```
 
-开发用 `tsx` 跑源码；发布产物在各包 `dist/`。
+开发用 `tsx` 跑源码；发布产物在各包 `dist/`。单测用 Node 内置 `node:test`（经 `tsx` 直跑 TS），放在各包 `test/` 目录（`*.test.ts`，不进 `tsc -b` 构建图）；测试间用临时 `XDG_CONFIG_HOME` / 环境变量隔离，不触真实用户配置。
 
 ## 工作方式
 
 - 面向用户的文档用中文；代码标识符和 CLI 标志用英文。
 - 改完后只更新会过期的命令与边界。不要复述目录树或 README。
-- 远程是 Gitee：`git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`，默认分支 `master`。
+- 主远程是 GitHub `origin`：`git@github.com:ej-cafe/agent-cli-toolkit.git`；备库是 Gitee `gitee`：`git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`。默认分支 `master`。日常 push / pull 用 `origin`；需要同步备库时再 `git push gitee`。
 - 用户没要求就不要 commit / push。不要改 git config、force push 或跳过 hooks。
 
 ## 边界

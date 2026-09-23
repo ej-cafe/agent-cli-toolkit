@@ -46,11 +46,11 @@ token profile（含各自的模型列表）保存在该目录下的 `token-profi
 ## 命令总览
 
 ```bash
-agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
 agent-cli token delete <name>
 agent-cli token list
 agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
-agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 agent-cli token usage [--name <profile>] [--output table|text|raw]
 ```
 
@@ -69,7 +69,7 @@ agent-cli token add
 # 一次性写全参数
 agent-cli token add \
   --name <name> \
-  --platform <aliyun|tencent|deepseek|kimi> \
+  --platform <aliyun|tencent|deepseek|kimi|glm> \
   --token <token> \
   [--base-url <url>] \
   [--claude-base-url <url>]
@@ -80,7 +80,7 @@ agent-cli token add \
 | 标志 | 必填 | 说明 |
 |------|------|------|
 | `--name` | 是 | profile 名称（本地唯一键） |
-| `--platform` | 是 | `aliyun`、`tencent`、`deepseek`、`kimi` |
+| `--platform` | 是 | `aliyun`、`tencent`、`deepseek`、`kimi`、`glm` |
 | `--token` | 是 | API token（可能进入 shell 历史，请谨慎） |
 | `--base-url` | 视平台 | OpenAI 兼容 API 根地址 |
 | `--claude-base-url` | 否 | Anthropic 兼容 API 根地址 |
@@ -94,10 +94,11 @@ agent-cli token add \
 | `aliyun` / `tencent` | **必填** | 可选 |
 | `deepseek` | 可省略，默认 `https://api.deepseek.com` | 可省略，默认 `https://api.deepseek.com/anthropic` |
 | `kimi` | 可省略，默认 `https://api.moonshot.cn/v1`（中国站） | 可省略，默认 `https://api.moonshot.cn/anthropic` |
+| `glm` | 可省略，默认 `https://open.bigmodel.cn/api/coding/paas/v4`（中国站 Coding Plan） | 可省略，默认 `https://open.bigmodel.cn/api/anthropic` |
 
 显式传入的 URL 会覆盖预设。Kimi 国际站可将 URL 覆盖为 `api.moonshot.ai` 对应地址。
 
-交互模式下，`deepseek` / `kimi` 的 base-url 与 claude-base-url 可直接回车使用预设；`aliyun` / `tencent` 必须填写 base-url。
+交互模式下，`deepseek` / `kimi` / `glm` 的 base-url 与 claude-base-url 可直接回车使用预设；`aliyun` / `tencent` 必须填写 base-url。`glm` 国际站或通用按量端点可用显式 URL 覆盖。
 
 ### 示例
 
@@ -207,7 +208,7 @@ agent-cli token use ds --tool pi --model deepseek-chat
 ### 用法
 
 ```bash
-agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 ```
 
 | 标志 | 说明 |
@@ -224,6 +225,7 @@ agent-cli token sync-model-list
 agent-cli token sync-model-list --name ds
 agent-cli token sync-model-list --platform aliyun
 agent-cli token sync-model-list --platform kimi
+agent-cli token sync-model-list --platform glm
 ```
 
 ---
@@ -252,7 +254,8 @@ agent-cli token usage [--name <profile>] [--output table|text|raw]
 | `deepseek` | `GET {baseUrl}/user/balance` | 使用 profile 中的 API token |
 | `kimi` | `GET {baseUrl}/users/me/balance` | 使用 profile 中的 API token |
 | `aliyun` | 本机 `bl usage token-plan --output json` | 需已安装 bailian-cli（`bl` 在 PATH 中），并先执行 `bl auth login --console`；**不读** profile 里的 API Key |
-| `tencent` | — | 暂不支持 |
+| `tencent` | — | 暂不支持 API 余额查询，请前往控制台：https://console.cloud.tencent.com/tokenhub |
+| `glm` | — | 暂不支持 API 余额查询，请前往控制台：https://bigmodel.cn/coding-plan/personal/usage |
 
 多个 aliyun profile 只会实际调用一次 `bl`。某个 profile 失败时，错误写到 stderr，其它 profile 仍会继续；若全部失败则退出码为 1。
 

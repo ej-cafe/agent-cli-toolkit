@@ -1,59 +1,10 @@
+import { fetchJson, joinUrlPath } from "./http.js";
 import { isRecord } from "./json-file.js";
 import type { TokenProfileModel } from "./types.js";
-
-const requestTimeoutMs = 15_000;
-
-export type OpenAiModelsFetch = (
-  input: string,
-  init: {
-    method: string;
-    headers: Record<string, string>;
-    signal: AbortSignal;
-  },
-) => Promise<{
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-}>;
 
 export type OpenAiModelsResult =
   | { models: TokenProfileModel[] }
   | { models: undefined; reason: string };
-
-async function defaultFetch(
-  input: string,
-  init: {
-    method: string;
-    headers: Record<string, string>;
-    signal: AbortSignal;
-  },
-): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> {
-  const response = await fetch(input, init);
-  return {
-    ok: response.ok,
-    status: response.status,
-    json: () => response.json() as Promise<unknown>,
-  };
-}
-
-let openAiModelsFetch: OpenAiModelsFetch = defaultFetch;
-
-export function setOpenAiModelsFetch(fn: OpenAiModelsFetch | undefined): void {
-  openAiModelsFetch = fn ?? defaultFetch;
-}
-
-function modelsUrl(baseUrl: string): string | undefined {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
-  if (trimmed === "") {
-    return undefined;
-  }
-  try {
-    new URL(trimmed);
-  } catch {
-    return undefined;
-  }
-  return `${trimmed}/models`;
-}
 
 function parseOpenAiModels(parsed: unknown): TokenProfileModel[] | undefined {
   if (!isRecord(parsed) || !Array.isArray(parsed.data)) {
@@ -83,51 +34,40 @@ function parseOpenAiModels(parsed: unknown): TokenProfileModel[] | undefined {
   return models.length > 0 ? models : undefined;
 }
 
-function isTimeout(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    (error as { name: unknown }).name === "TimeoutError"
-  );
-}
-
 export async function tryFetchOpenAiModels(
   baseUrl: string,
   token: string,
 ): Promise<OpenAiModelsResult> {
-  const url = modelsUrl(baseUrl);
+  const url = joinUrlPath(baseUrl, "/models");
   if (url === undefined) {
     return { models: undefined, reason: "baseUrl 无效" };
   }
-  
-  try {
-    const response = await openAiModelsFetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    });
-    if (!response.ok) {
-      return {
-        models: undefined,
-        reason: `GET ${url} 失败: HTTP ${response.status}`,
-      };
-    }
-    const models = parseOpenAiModels(await response.json());
-    if (models === undefined) {
-      return {
-        models: undefined,
-        reason: `GET ${url} 响应无法解析或列表为空`,
-      };
-    }
-    return { models };
-  } catch (error) {
-    if (isTimeout(error)) {
+
+  const result = await fetchJson(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  if (!result.ok) {
+    if (result.error.kind === "timeout") {
       return { models: undefined, reason: `GET ${url} 超时` };
+    }
+    if (result.error.kind === "http") {
+      return {
+        models: undefined,
+        reason: `GET ${url} 失败: HTTP ${result.error.status}`,
+      };
     }
     return { models: undefined, reason: `GET ${url} 失败` };
   }
+
+  const models = parseOpenAiModels(result.data);
+  if (models === undefined) {
+    return {
+      models: undefined,
+      reason: `GET ${url} 响应无法解析或列表为空`,
+    };
+  }
+  return { models };
 }
