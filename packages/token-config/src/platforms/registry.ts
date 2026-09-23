@@ -2,6 +2,7 @@ import { fail } from "../errors.js";
 import type { Platform } from "../types.js";
 import { aliyunPlatform } from "./aliyun.js";
 import { deepseekPlatform } from "./deepseek.js";
+import { glmPlatform } from "./glm.js";
 import { kimiPlatform } from "./kimi.js";
 import type { TokenPlatform } from "./platform.js";
 import { tencentPlatform } from "./tencent.js";
@@ -12,6 +13,7 @@ const platforms: readonly TokenPlatform[] = [
   tencentPlatform,
   deepseekPlatform,
   kimiPlatform,
+  glmPlatform,
 ];
 
 export function listPlatforms(): readonly TokenPlatform[] {

@@ -140,7 +140,40 @@ describe("runTokenUsage", () => {
       // 部分失败但有成功段 → 退出码 0，失败段记入 stderr
       assert.equal(code, 0);
       assert.ok(stdout.includes("ds (deepseek)"));
-      assert.match(stderr, /tct: 暂不支持腾讯云套餐余量查询/);
+      assert.match(
+        stderr,
+        /tct: 腾讯云 暂不支持 API 形式余额查询，请前往控制台查询。网址：https:\/\/console\.cloud\.tencent\.com\/tokenhub/,
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("fails glm usage without HTTP", async () => {
+    saveProfiles({
+      profiles: {
+        zg: profile({
+          platform: "glm",
+          baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+        }),
+      },
+    });
+    let called = false;
+    const restore = mockHttpFetch(() => {
+      called = true;
+      return statusResponse(500);
+    });
+    try {
+      const { stdout, stderr, code } = await captureStd(() =>
+        runTokenUsage(["--name", "zg"]),
+      );
+      assert.equal(code, 1);
+      assert.equal(stdout, "");
+      assert.match(
+        stderr,
+        /zg: 智谱 GLM 暂不支持 API 形式余额查询，请前往控制台查询。网址：https:\/\/bigmodel\.cn\/coding-plan\/personal\/usage/,
+      );
+      assert.equal(called, false);
     } finally {
       restore();
     }
@@ -158,7 +191,7 @@ describe("runTokenUsage", () => {
       assert.equal(code, 1);
       assert.equal(stdout, "");
       assert.match(stderr, /ds: GET .* 失败: HTTP 500/);
-      assert.match(stderr, /tct: 暂不支持/);
+      assert.match(stderr, /tct: 腾讯云 暂不支持 API 形式余额查询/);
     } finally {
       restore();
     }

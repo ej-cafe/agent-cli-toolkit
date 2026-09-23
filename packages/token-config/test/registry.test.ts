@@ -4,6 +4,8 @@ import { TokenConfigError } from "../src/errors.js";
 import {
   DEEPSEEK_DEFAULT_BASE_URL,
   DEEPSEEK_DEFAULT_CLAUDE_BASE_URL,
+  GLM_DEFAULT_BASE_URL,
+  GLM_DEFAULT_CLAUDE_BASE_URL,
   KIMI_DEFAULT_BASE_URL,
   KIMI_DEFAULT_CLAUDE_BASE_URL,
 } from "../src/types.js";
@@ -17,7 +19,7 @@ import {
 describe("listPlatforms", () => {
   it("order defines numeric aliases", () => {
     const ids = listPlatforms().map((platform) => platform.id);
-    assert.deepEqual(ids, ["aliyun", "tencent", "deepseek", "kimi"]);
+    assert.deepEqual(ids, ["aliyun", "tencent", "deepseek", "kimi", "glm"]);
     for (const [index, platform] of listPlatforms().entries()) {
       assert.equal(platform.aliases[0], String(index + 1));
       assert.ok(platform.aliases.includes(platform.id));
@@ -26,8 +28,8 @@ describe("listPlatforms", () => {
 });
 
 describe("isPlatform", () => {
-  it("accepts the four ids", () => {
-    for (const id of ["aliyun", "tencent", "deepseek", "kimi"]) {
+  it("accepts the five ids", () => {
+    for (const id of ["aliyun", "tencent", "deepseek", "kimi", "glm"]) {
       assert.ok(isPlatform(id));
     }
   });
@@ -54,6 +56,10 @@ describe("getPlatform", () => {
       baseUrl: KIMI_DEFAULT_BASE_URL,
       claudeBaseUrl: KIMI_DEFAULT_CLAUDE_BASE_URL,
     });
+    assert.deepEqual(getPlatform("glm").presets, {
+      baseUrl: GLM_DEFAULT_BASE_URL,
+      claudeBaseUrl: GLM_DEFAULT_CLAUDE_BASE_URL,
+    });
   });
 });
 
@@ -62,6 +68,7 @@ describe("getPlatformOrAlias", () => {
     assert.equal(getPlatformOrAlias("1"), getPlatformOrAlias("aliyun"));
     assert.equal(getPlatformOrAlias("3"), getPlatformOrAlias("deepseek"));
     assert.equal(getPlatformOrAlias("4").id, "kimi");
+    assert.equal(getPlatformOrAlias("5"), getPlatformOrAlias("glm"));
   });
 
   it("fails with the original message for unknown values", () => {

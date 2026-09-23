@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { runTokenCommand } from "../src/commands/token.js";
 import { runTokenAdd } from "../src/commands/add.js";
+import { runTokenSyncModelList } from "../src/commands/sync-model-list.js";
 import { TokenConfigError } from "../src/errors.js";
-import { loadProfiles } from "../src/store.js";
+import { loadProfiles, saveProfiles } from "../src/store.js";
 import {
   captureStd,
   jsonResponse,
@@ -39,6 +40,8 @@ describe("runTokenCommand dispatch", () => {
     assert.match(help.stderr, /DeepSeek Harness（dsh）/);
     assert.match(help.stderr, /配置目录或对应程序不存在时跳过该工具，且不创建该配置目录/);
     assert.match(help.stderr, /--tool 的取值仍是 dsh/);
+    assert.match(help.stderr, /aliyun\|tencent\|deepseek\|kimi\|glm/);
+    assert.match(help.stderr, /glm 预设为中国站 Coding Plan/);
   });
 
   it("reports unknown verbs with exit 1", async () => {
@@ -139,6 +142,77 @@ describe("runTokenAdd", () => {
     }
   });
 
+  it("resolves glm Coding Plan presets when URLs are omitted", async () => {
+    const restore = mockHttpFetch((url) => {
+      assert.equal(
+        String(url),
+        "https://open.bigmodel.cn/api/coding/paas/v4/models",
+      );
+      return jsonResponse({ data: [{ id: "glm-5", name: "GLM-5" }] });
+    });
+    try {
+      const { code } = await captureStd(() =>
+        runTokenAdd(["--name", "zg", "--platform", "glm", "--token", "t"]),
+      );
+      assert.equal(code, 0);
+      const saved = loadProfiles().profiles.zg;
+      assert.equal(saved!.platform, "glm");
+      assert.equal(
+        saved!.baseUrl,
+        "https://open.bigmodel.cn/api/coding/paas/v4",
+      );
+      assert.equal(
+        saved!.claudeBaseUrl,
+        "https://open.bigmodel.cn/api/anthropic",
+      );
+      assert.deepEqual(saved!.models, [{ id: "glm-5", name: "GLM-5" }]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("explicit URLs override glm Coding Plan presets", async () => {
+    const restore = mockHttpFetch((url) => {
+      assert.equal(String(url), "https://open.bigmodel.cn/api/paas/v4/models");
+      return jsonResponse({ data: [{ id: "m1", name: "M1" }] });
+    });
+    try {
+      await runTokenAdd([
+        "--name",
+        "zg",
+        "--platform",
+        "glm",
+        "--token",
+        "t",
+        "--base-url",
+        "https://open.bigmodel.cn/api/paas/v4",
+        "--claude-base-url",
+        "https://open.bigmodel.cn/api/anthropic",
+      ]);
+      const saved = loadProfiles().profiles.zg;
+      assert.equal(saved!.baseUrl, "https://open.bigmodel.cn/api/paas/v4");
+      assert.equal(
+        saved!.claudeBaseUrl,
+        "https://open.bigmodel.cn/api/anthropic",
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("fails without saving when glm models fetch fails", async () => {
+    const restore = mockHttpFetch(() => statusResponse(401));
+    try {
+      await assert.rejects(
+        runTokenAdd(["--name", "zg", "--platform", "glm", "--token", "t"]),
+        /无法获取 zg 模型列表/,
+      );
+      assert.equal(loadProfiles().profiles.zg, undefined);
+    } finally {
+      restore();
+    }
+  });
+
   it("rejects duplicate profile names", async () => {
     const restore = mockHttpFetch(() =>
       jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
@@ -162,6 +236,50 @@ describe("runTokenAdd", () => {
         /无法获取 bad 模型列表/,
       );
       assert.equal(loadProfiles().profiles.bad, undefined);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("runTokenSyncModelList glm filter", () => {
+  it("syncs only glm profiles when --platform glm", async () => {
+    saveProfiles({
+      profiles: {
+        zg: {
+          platform: "glm",
+          token: "t",
+          baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+          claudeBaseUrl: "https://open.bigmodel.cn/api/anthropic",
+          models: [{ id: "old", name: "old" }],
+        },
+        work: {
+          platform: "aliyun",
+          token: "t",
+          baseUrl: "https://example.openai/v1",
+          models: [{ id: "a", name: "a" }],
+        },
+      },
+    });
+    const restore = mockHttpFetch((url) => {
+      assert.equal(
+        String(url),
+        "https://open.bigmodel.cn/api/coding/paas/v4/models",
+      );
+      return jsonResponse({ data: [{ id: "glm-5", name: "GLM-5" }] });
+    });
+    try {
+      const { stdout, code } = await captureStd(() =>
+        runTokenSyncModelList(["--platform", "glm"]),
+      );
+      assert.equal(code, 0);
+      assert.match(stdout, /已同步模型列表: zg/);
+      assert.deepEqual(loadProfiles().profiles.zg!.models, [
+        { id: "glm-5", name: "GLM-5" },
+      ]);
+      assert.deepEqual(loadProfiles().profiles.work!.models, [
+        { id: "a", name: "a" },
+      ]);
     } finally {
       restore();
     }

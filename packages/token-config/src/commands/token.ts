@@ -22,8 +22,8 @@ const tokenCommands: readonly TokenCommand[] = [
   {
     verb: "add",
     usage:
-      "agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]",
-    hint: "（交互式终端可省略标志，问答补齐缺失字段；deepseek / kimi 可省略 URL，使用官方预设，显式传入则覆盖）",
+      "agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]",
+    hint: "（交互式终端可省略标志，问答补齐缺失字段；deepseek / kimi / glm 可省略 URL，使用官方预设，显式传入则覆盖；glm 预设为中国站 Coding Plan）",
     run: runTokenAdd,
   },
   { verb: "delete", usage: "agent-cli token delete <name>", run: runTokenDelete },
@@ -38,7 +38,7 @@ const tokenCommands: readonly TokenCommand[] = [
   {
     verb: "sync-model-list",
     usage:
-      "agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]",
+      "agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]",
     hint: "（省略 --name 时同步全部目标 profile；--platform 仅过滤；每个目标用自己的 {baseUrl}/models）",
     run: runTokenSyncModelList,
   },

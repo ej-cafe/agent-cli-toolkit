@@ -1,7 +1,8 @@
 import { fail } from "../errors.js";
 import type { TokenPlatform } from "./platform.js";
 
-const unsupported = "暂不支持腾讯云套餐余量查询\n";
+const unsupported =
+  "腾讯云 暂不支持 API 形式余额查询，请前往控制台查询。网址：https://console.cloud.tencent.com/tokenhub\n";
 
 export const tencentPlatform: TokenPlatform = {
   id: "tencent",

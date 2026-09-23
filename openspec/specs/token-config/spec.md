@@ -6,11 +6,13 @@
 
 ## Requirements
 
+
+
 ### Requirement: 存储 token profile
 
 系统必须把 token profile 持久化到全局配置目录下的 `token-profile.json`（若设置了 `XDG_CONFIG_HOME`，则为 `$XDG_CONFIG_HOME/agent-cli-toolkit`，否则为 `~/.config/agent-cli-toolkit`）。
 
-每个 profile 必须包含：唯一 `name`、`platform`（`aliyun`、`tencent`、`deepseek` 或 `kimi`）、`token`、`baseUrl`，以及 `models`（该 profile 自己的模型列表，每项含 `id` 与 `name`）。同平台不同 profile 的 `models` 必须允许不同。profile 可以包含 `claudeBaseUrl`。写入 Claude 兼容地址时，若 `claudeBaseUrl` 存在且非空则必须使用它，否则使用 `baseUrl`。
+每个 profile 必须包含：唯一 `name`、`platform`（`aliyun`、`tencent`、`deepseek`、`kimi` 或 `glm`）、`token`、`baseUrl`，以及 `models`（该 profile 自己的模型列表，每项含 `id` 与 `name`）。同平台不同 profile 的 `models` 必须允许不同。profile 可以包含 `claudeBaseUrl`。写入 Claude 兼容地址时，若 `claudeBaseUrl` 存在且非空则必须使用它，否则使用 `baseUrl`。
 
 系统不得读写配置目录下的 `model-list.json`；不得把平台级模型目录当作 profile `models` 的来源。系统不得把 `token-profile.json` 或 token 值提交进 git 仓库。
 
@@ -36,7 +38,7 @@
 
 #### Scenario: 添加时写入平台模型列表
 
-- **WHEN** 用户添加一套 `aliyun`、`tencent`、`deepseek` 或 `kimi` profile，且配置目录下已存在含该平台键的 `model-list.json`
+- **WHEN** 用户添加一套 `aliyun`、`tencent`、`deepseek`、`kimi` 或 `glm` profile，且配置目录下已存在含该平台键的 `model-list.json`
 - **THEN** 系统不读取该文件；该 profile 的 `models` 只来自正在添加凭据的 `{baseUrl}/models`，不得来自 `model-list.json`
 
 #### Scenario: 忽略已有 model-list.json
@@ -48,7 +50,7 @@
 
 系统必须提供 `agent-cli token add` 以创建 profile。命令必须接受标志：`--name`、`--platform`、`--token`、`--base-url`，以及可选的 `--claude-base-url`。
 
-`platform` 必须是 `aliyun`、`tencent`、`deepseek` 或 `kimi`。命令必须拒绝未知平台、空的 `name`/`token`，以及已存在的 `name`。成功时写入 profile 并以退出码 0 结束。
+`platform` 必须是 `aliyun`、`tencent`、`deepseek`、`kimi` 或 `glm`。命令必须拒绝未知平台、空的 `name`/`token`，以及已存在的 `name`。成功时写入 profile 并以退出码 0 结束。
 
 平台 `aliyun` 或 `tencent`：`--base-url` 必须非空；未提供非空 `--claude-base-url` 时必须省略 `claudeBaseUrl`。
 
@@ -56,9 +58,11 @@
 
 平台 `kimi`：`--base-url` 与 `--claude-base-url` 均可省略。省略或为空时必须分别写入预设 `baseUrl` = `https://api.moonshot.cn/v1`、`claudeBaseUrl` = `https://api.moonshot.cn/anthropic`。用户提供非空值时必须覆盖对应字段。Kimi 在使用预设时必须写入 `claudeBaseUrl`（不得因未传标志而省略该字段）。国际站用户必须通过显式 URL 覆盖（例如 `https://api.moonshot.ai/v1` 与 `https://api.moonshot.ai/anthropic`）。
 
-写入 `models` 前，系统必须用正在添加的 `baseUrl`（含 DeepSeek / Kimi 预设解析后的最终值）与 `token` 请求 `{baseUrl}/models`（`baseUrl` 去掉末尾 `/` 后加上 `/models`，请求头带 `Authorization: Bearer <token>`）。成功且得到非空列表时，必须把该列表只写入新 profile 的 `models`，不得改写其它已有 profile 的 `models`，不得读写 `model-list.json`。若请求失败、无法解析或得到空列表，必须不写入 profile。不得因同平台已有 profile 或已有 `model-list.json` 而跳过拉取或复用其列表。
+平台 `glm`：`--base-url` 与 `--claude-base-url` 均可省略。省略或为空时必须分别写入预设 `baseUrl` = `https://open.bigmodel.cn/api/coding/paas/v4`、`claudeBaseUrl` = `https://open.bigmodel.cn/api/anthropic`（中国站 GLM Coding Plan）。用户提供非空值时必须覆盖对应字段。GLM 在使用预设时必须写入 `claudeBaseUrl`（不得因未传标志而省略该字段）。通用按量端点（例如 `https://open.bigmodel.cn/api/paas/v4`）与国际站（例如 `https://api.z.ai/api/coding/paas/v4` 与 `https://api.z.ai/api/anthropic`）必须通过显式 URL 覆盖。
 
-必填字段：`name`、`platform`、`token`；对 `aliyun`/`tencent` 另加 `base-url`。若上述必填均已提供，系统不得进入问答，行为与仅用标志添加相同。若任一必填缺失：当 stdin 是交互式终端时，系统必须只询问缺失的必填字段；对 `aliyun`/`tencent`，在未通过标志提供 `--claude-base-url` 时询问可选的 Claude 兼容地址（空回答必须省略 `claudeBaseUrl`）；对 `deepseek` 或 `kimi`，可询问可选的 base-url 与 Claude 兼容地址（空回答必须使用对应预设），亦可不询问而直接使用预设。当 stdin 不是交互式终端时，系统必须拒绝缺少的必填标志，向 stderr 输出错误，并以非 0 退出码结束，且不得等待输入。问答中已用标志提供的字段不得再询问。交互选择平台时，必须提供 `aliyun`、`tencent`、`deepseek`、`kimi` 选项。
+写入 `models` 前，系统必须用正在添加的 `baseUrl`（含 DeepSeek / Kimi / GLM 预设解析后的最终值）与 `token` 请求 `{baseUrl}/models`（`baseUrl` 去掉末尾 `/` 后加上 `/models`，请求头带 `Authorization: Bearer <token>`）。成功且得到非空列表时，必须把该列表只写入新 profile 的 `models`，不得改写其它已有 profile 的 `models`，不得读写 `model-list.json`。若请求失败、无法解析或得到空列表，必须不写入 profile。不得因同平台已有 profile 或已有 `model-list.json` 而跳过拉取或复用其列表。
+
+必填字段：`name`、`platform`、`token`；对 `aliyun`/`tencent` 另加 `base-url`。若上述必填均已提供，系统不得进入问答，行为与仅用标志添加相同。若任一必填缺失：当 stdin 是交互式终端时，系统必须只询问缺失的必填字段；对 `aliyun`/`tencent`，在未通过标志提供 `--claude-base-url` 时询问可选的 Claude 兼容地址（空回答必须省略 `claudeBaseUrl`）；对 `deepseek`、`kimi` 或 `glm`，可询问可选的 base-url 与 Claude 兼容地址（空回答必须使用对应预设），亦可不询问而直接使用预设。当 stdin 不是交互式终端时，系统必须拒绝缺少的必填标志，向 stderr 输出错误，并以非 0 退出码结束，且不得等待输入。问答中已用标志提供的字段不得再询问。交互选择平台时，必须提供 `aliyun`、`tencent`、`deepseek`、`kimi`、`glm` 选项。
 
 #### Scenario: 添加成功
 
@@ -145,6 +149,21 @@
 - **WHEN** 用户执行 `agent-cli token add --name km --platform kimi --token SECRET`，且对预设 `https://api.moonshot.cn/v1/models` 请求失败
 - **THEN** 系统不写入 profile，向 stderr 输出错误，并以非 0 退出码结束
 
+#### Scenario: 添加 GLM 省略 URL 时使用 Coding Plan 预设
+
+- **WHEN** 用户执行 `agent-cli token add --name zg --platform glm --token SECRET`（未给 `--base-url` 与 `--claude-base-url`），且 `GET https://open.bigmodel.cn/api/coding/paas/v4/models` 返回非空模型列表
+- **THEN** 系统保存名为 `zg` 的 `glm` profile，`baseUrl` 为 `https://open.bigmodel.cn/api/coding/paas/v4`，`claudeBaseUrl` 为 `https://open.bigmodel.cn/api/anthropic`，`models` 与该接口列表一致，并以退出码 0 结束
+
+#### Scenario: 添加 GLM 时显式 URL 覆盖预设
+
+- **WHEN** 用户执行 `agent-cli token add --name zg --platform glm --token SECRET --base-url https://open.bigmodel.cn/api/paas/v4 --claude-base-url https://open.bigmodel.cn/api/anthropic`，且 `GET https://open.bigmodel.cn/api/paas/v4/models` 返回非空模型列表
+- **THEN** 系统保存 profile，`baseUrl` 与 `claudeBaseUrl` 分别为用户所给值（不以 Coding Plan 预设覆盖），并以退出码 0 结束
+
+#### Scenario: 添加 GLM 时 models 失败则不写入
+
+- **WHEN** 用户执行 `agent-cli token add --name zg --platform glm --token SECRET`，且对预设 `https://open.bigmodel.cn/api/coding/paas/v4/models` 请求失败
+- **THEN** 系统不写入 profile，向 stderr 输出错误，并以非 0 退出码结束
+
 #### Scenario: 已有非空目录时不覆盖
 
 - **WHEN** `model-list.json` 的 `aliyun` 已有非空列表，用户添加一套 `aliyun` profile，且对该 profile 的 `{baseUrl}/models` 返回与目录不同的非空列表
@@ -159,7 +178,7 @@
 
 系统必须提供 `agent-cli token sync-model-list`，按目标 profile 刷新各自保存在 `token-profile.json` 中的 `models`。
 
-命令必须接受可选标志 `--name <profile>` 与可选标志 `--platform <aliyun|tencent|deepseek|kimi>`。不得接受额外位置参数；若传入多余参数，必须向 stderr 输出错误并以非 0 退出码结束。
+命令必须接受可选标志 `--name <profile>` 与可选标志 `--platform <aliyun|tencent|deepseek|kimi|glm>`。不得接受额外位置参数；若传入多余参数，必须向 stderr 输出错误并以非 0 退出码结束。
 
 目标选择：
 
@@ -200,6 +219,11 @@
 
 - **WHEN** 已存在 `kimi` profile `km` 与 `aliyun` profile `work`，用户执行 `agent-cli token sync-model-list --platform kimi`，且 `km` 的 `{baseUrl}/models` 返回非空列表
 - **THEN** 系统只更新 `km` 的 `models`，不改写 `work`，并以退出码 0 结束
+
+#### Scenario: 按 glm 平台过滤同步
+
+- **WHEN** 已存在 `glm` profile `zg` 与 `aliyun` profile `work`，用户执行 `agent-cli token sync-model-list --platform glm`，且 `zg` 的 `{baseUrl}/models` 返回非空列表
+- **THEN** 系统只更新 `zg` 的 `models`，不改写 `work`，并以退出码 0 结束
 
 #### Scenario: 省略标志时同步全部 profile
 
@@ -628,7 +652,8 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 - `deepseek`：必须使用该 profile 的 `token` 作为 Bearer，对 `baseUrl`（去掉末尾 `/`）发起 `GET`，路径为该 `baseUrl` 加上 `/user/balance`，请求头带 `Authorization: Bearer <token>` 与 `Accept: application/json`。成功摘要至少包含是否可用于 API 调用以及各币种余额字段（若响应中存在）。不得打印完整 API Key。不得调用 `bl`。
 - `kimi`：必须使用该 profile 的 `token` 作为 Bearer，对 `baseUrl`（去掉末尾 `/`）发起 `GET`，路径为该 `baseUrl` 加上 `/users/me/balance`。若 HTTP 失败，或响应根对象中 `code` 存在且不等于 `0`，或 `status` 为 `false`，或缺少含余额字段的 `data`，计为该套失败。成功摘要至少包含 `available_balance`、`voucher_balance`、`cash_balance`（若存在）。不得打印完整 API Key。不得调用 `bl`。
 - `aliyun`：必须通过本机 PATH 上的 `bl` 执行 `bl usage token-plan --output json`（或等价 JSON 调用）。必须要求已完成控制台鉴权（`bl auth login --console`）；不得用该 profile 的百炼 API Key 冒充该查询凭据。成功时向 stdout 输出挂在该 profile 名下的余量摘要（含用量窗口与重置时间，若存在）。同一轮命令中若多个目标为 `aliyun`，`bl` 至多调用一次，各 aliyun profile 分别展示同一份摘要。`bl` 不可执行、无控制台登录态、或其它非 0 / JSON 无法解析时，计为该套（及复用同一失败的其余 aliyun 目标）失败，并向 stderr 说明（缺 `bl` 时说明需安装 bailian-cli；无登录态时转述需 `bl auth login --console`）。
-- `tencent`：必须将该套计为失败，向 stderr 说明该平台暂不支持余量查询，不发起外部请求。
+- `tencent`：必须将该套计为失败，向 stderr 输出 `腾讯云 暂不支持 API 形式余额查询，请前往控制台查询。网址：https://console.cloud.tencent.com/tokenhub`，不发起外部请求。
+- `glm`：必须将该套计为失败，向 stderr 输出 `智谱 GLM 暂不支持 API 形式余额查询，请前往控制台查询。网址：https://bigmodel.cn/coding-plan/personal/usage`，不发起外部请求。
 
 该命令不得修改 `token-profile.json` 或任何 agent 工具配置。
 
@@ -650,7 +675,12 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 #### Scenario: 拒绝腾讯云
 
 - **WHEN** 已保存 `tencent` profile `tx`，用户执行 `agent-cli token usage --name tx`
-- **THEN** 系统不发起外部查询，向 stderr 说明暂不支持，并以非 0 退出码结束
+- **THEN** 系统不发起外部查询，向 stderr 输出含「腾讯云 暂不支持 API 形式余额查询」与控制台网址 `https://console.cloud.tencent.com/tokenhub` 的说明，并以非 0 退出码结束
+
+#### Scenario: 拒绝 GLM
+
+- **WHEN** 已保存 `glm` profile `zg`，用户执行 `agent-cli token usage --name zg`
+- **THEN** 系统不发起外部查询，向 stderr 输出含「智谱 GLM 暂不支持 API 形式余额查询」与控制台网址 `https://bigmodel.cn/coding-plan/personal/usage` 的说明，并以非 0 退出码结束
 
 #### Scenario: DeepSeek 唯一 profile 时查询余额成功
 
@@ -759,7 +789,7 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 
 ### Requirement: 帮助信息列出 token 命令
 
-`agent-cli --help` 必须说明 `token add`、`token delete`、`token list`、`token use`、`token sync-model-list`、`token usage`，并在 `use` 上说明 `--all`、`--tool` 和 `--model`。必须说明 `token add` 可省略标志、在交互式终端以问答补齐缺失字段。必须说明 `--tool` 可指定 `claude-code`、`opencode`、`dsh`、`pi`。必须说明 `--model` 对 Claude Code、DeepSeek Harness（dsh）与 pi 有效。必须说明把 profile 应用到 pi 时会设置 `defaultProvider`（profile 名称）与 `defaultModel`（有 `--model` 时用该 id，否则用该 profile 模型列表第一项）。必须用显示名 DeepSeek Harness（dsh）称呼该工具，不得在帮助正文里只写 `dsh` 来指代它（`--tool` 的取值仍是 `dsh`）。必须说明配置目录或对应程序不存在的工具会被跳过，且不会因此创建该配置目录。必须说明 `sync-model-list` 可按 `--name` 同步单个 profile，可按 `--platform` 过滤，省略 `--name` 时同步全部目标 profile，且每个目标都用该 profile 自己的 `{baseUrl}/models`。必须说明 `--platform` 对 `add` / `sync-model-list` 可取 `aliyun`、`tencent`、`deepseek`、`kimi`。必须说明 DeepSeek 与 Kimi 添加时可省略 `--base-url` / `--claude-base-url` 并使用官方预设，显式传入则覆盖。必须说明 `token usage` 按已保存 profile 分段查询套餐余量或账户余额并分别展示，成功段之间以空行分隔；省略 `--name` 时查询全部 profile，可用 `--name` 指定单套；必须说明 `--output` 可取 `table`、`text` 或 `raw`，省略时默认为表格。不得再说明 usage 接受或默认 `--platform`。不得再说明按平台共享 `model-list.json` 或同步腾讯云使用 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY`。
+`agent-cli --help` 必须说明 `token add`、`token delete`、`token list`、`token use`、`token sync-model-list`、`token usage`，并在 `use` 上说明 `--all`、`--tool` 和 `--model`。必须说明 `token add` 可省略标志、在交互式终端以问答补齐缺失字段。必须说明 `--tool` 可指定 `claude-code`、`opencode`、`dsh`、`pi`。必须说明 `--model` 对 Claude Code、DeepSeek Harness（dsh）与 pi 有效。必须说明把 profile 应用到 pi 时会设置 `defaultProvider`（profile 名称）与 `defaultModel`（有 `--model` 时用该 id，否则用该 profile 模型列表第一项）。必须用显示名 DeepSeek Harness（dsh）称呼该工具，不得在帮助正文里只写 `dsh` 来指代它（`--tool` 的取值仍是 `dsh`）。必须说明配置目录或对应程序不存在的工具会被跳过，且不会因此创建该配置目录。必须说明 `sync-model-list` 可按 `--name` 同步单个 profile，可按 `--platform` 过滤，省略 `--name` 时同步全部目标 profile，且每个目标都用该 profile 自己的 `{baseUrl}/models`。必须说明 `--platform` 对 `add` / `sync-model-list` 可取 `aliyun`、`tencent`、`deepseek`、`kimi`、`glm`。必须说明 DeepSeek、Kimi 与 GLM 添加时可省略 `--base-url` / `--claude-base-url` 并使用官方预设，显式传入则覆盖；GLM 预设为中国站 Coding Plan。必须说明 `token usage` 按已保存 profile 分段查询套餐余量或账户余额并分别展示；对暂不支持 API 查询的平台（腾讯云、智谱 GLM）必须说明需前往控制台查询，成功段之间以空行分隔；省略 `--name` 时查询全部 profile，可用 `--name` 指定单套；必须说明 `--output` 可取 `table`、`text` 或 `raw`，省略时默认为表格。不得再说明 usage 接受或默认 `--platform`。不得再说明按平台共享 `model-list.json` 或同步腾讯云使用 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY`。
 
 #### Scenario: 帮助中出现 token 命令
 
@@ -794,7 +824,7 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 #### Scenario: 帮助列出平台含 deepseek
 
 - **WHEN** 用户执行 `agent-cli --help`
-- **THEN** 输出说明 `--platform` 可指定 `aliyun`、`tencent`、`deepseek`、`kimi`
+- **THEN** 输出说明 `--platform` 可指定 `aliyun`、`tencent`、`deepseek`、`kimi`、`glm`
 
 #### Scenario: 帮助说明 DeepSeek URL 预设
 
@@ -805,6 +835,11 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 
 - **WHEN** 用户执行 `agent-cli --help`
 - **THEN** 输出说明 Kimi 可省略 base-url / claude-base-url 并使用中国站预设，显式传入则覆盖
+
+#### Scenario: 帮助说明 GLM URL 预设
+
+- **WHEN** 用户执行 `agent-cli --help`
+- **THEN** 输出说明 GLM 可省略 base-url / claude-base-url 并使用中国站 Coding Plan 预设，显式传入则覆盖
 
 #### Scenario: 帮助列出 dsh
 
@@ -819,5 +854,4 @@ pi agent 目录必须为：若环境变量 `PI_CODING_AGENT_DIR` 非空（trim �
 #### Scenario: 帮助列出 usage
 
 - **WHEN** 用户执行 `agent-cli --help`
-- **THEN** 输出说明 `token usage` 按 profile 分段展示余量、段间空行，可用 `--name` 指定 profile、`--output` 取 `table`（默认）、`text` 或 `raw`，且不将 `--platform` 作为 usage 的参数说明
-
+- **THEN** 输出说明 `token usage` 按 profile 分段展示余量、段间空行，可用 `--name` 指定 profile、`--output` 取 `table`（默认）、`text` 或 `raw`，且不将 `--platform` 作为 usage 的参数说明；并说明腾讯云与智谱 GLM 暂不支持 API 余额查询、需前往控制台
