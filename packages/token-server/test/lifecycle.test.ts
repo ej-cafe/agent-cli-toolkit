@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -8,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { logFilePath } from "../src/paths.js";
 import { isProcessAlive, readPidFile } from "../src/pidfile.js";
 import { writeActiveProfile } from "../src/state.js";
 import { installApiKey, profile, useTempXdgConfig, writeProfiles } from "./helpers.js";
@@ -90,7 +92,7 @@ describe("token-server lifecycle (integration)", () => {
     return listen(upstream);
   }
 
-  it("runs in the foreground, serves requests, and cleans the pidfile on SIGTERM", async () => {
+  it("runs in the foreground, prints credentials, serves requests, and cleans the pidfile on SIGTERM", async () => {
     const upstreamPort = await startUpstream();
     writeProfiles({
       work: profile({ baseUrl: `http://127.0.0.1:${upstreamPort}`, token: "tok" }),
@@ -112,10 +114,21 @@ describe("token-server lifecycle (integration)", () => {
       ],
       { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] },
     );
+    let childOut = "";
+    child.stdout?.on("data", (chunk) => {
+      childOut += String(chunk);
+    });
 
     try {
       const info = await waitFor(() => readPidFile());
       assert.equal(info.pid, child.pid);
+
+      assert.match(childOut, /OpenAI 兼容 baseUrl: http:\/\/127\.0\.0\.1:\d+\/v1/);
+      assert.match(
+        childOut,
+        /Anthropic 兼容 baseUrl: http:\/\/127\.0\.0\.1:\d+\/anthropic/,
+      );
+      assert.match(childOut, /apiKey: test-server-key/);
 
       const unauthorized = await fetch(`http://127.0.0.1:${info.port}/v1/models`);
       assert.equal(unauthorized.status, 401);
@@ -150,6 +163,12 @@ describe("token-server lifecycle (integration)", () => {
       const started = await runCli(["token-server", "start", "--port", "0"]);
       assert.equal(started.code, 0, started.stderr);
       assert.match(started.stdout, /正在监听/);
+      assert.match(started.stdout, /OpenAI 兼容 baseUrl: http:\/\/127\.0\.0\.1:\d+\/v1/);
+      assert.match(
+        started.stdout,
+        /Anthropic 兼容 baseUrl: http:\/\/127\.0\.0\.1:\d+\/anthropic/,
+      );
+      assert.match(started.stdout, /apiKey: test-server-key/);
 
       const info = await waitFor(() => readPidFile());
       daemonPid = info.pid;
@@ -159,6 +178,11 @@ describe("token-server lifecycle (integration)", () => {
       });
       assert.equal(res.status, 200);
       assert.equal(await res.text(), "pong");
+
+      // 守护子进程的输出进日志文件，但 API key 不得出现在日志中。
+      const log = readFileSync(logFilePath(), "utf8");
+      assert.doesNotMatch(log, /test-server-key/);
+      assert.doesNotMatch(log, /tsk_/);
 
       const stopped = await runCli(["token-server", "stop"]);
       assert.equal(stopped.code, 0, stopped.stderr);

@@ -193,18 +193,23 @@
 
 ### Requirement: start 与 stop 的进程生命周期
 
-`token-server start` 必须在后台以守护方式启动服务器，并在监听成功后把 `pid`、`host`、`port` 写入配置目录下 `token-server.pid`，随后以退出码 0 结束并打印监听地址。`start --foreground` 必须在前台运行服务器，且同样写入 pidfile。
+`token-server start` 必须在后台以守护方式启动服务器，并在监听成功后把 `pid`、`host`、`port` 写入配置目录下 `token-server.pid`，随后以退出码 0 结束，并在 stdout 打印监听地址、OpenAI 兼容 baseUrl（`http://<host>:<port>/v1`）、Anthropic 兼容 baseUrl（`http://<host>:<port>/anthropic`）与服务器 API key。`start --foreground` 必须在前台运行服务器，且同样写入 pidfile 并打印同样的连接信息。
 
 当已有服务器在运行（pidfile 中的进程存活）时，`start` 必须报错、以非零退出码结束、不留下新的 pidfile，且不启动第二个服务器。监听失败（例如端口被占用）时，`start` 必须报错、以非零退出码结束并清理 pidfile。
 
 `token-server stop` 必须读取 pidfile、向该进程发送终止信号、清理 pidfile 并以退出码 0 结束。当没有运行中的服务器（无 pidfile，或 pidfile 指向的进程不存在）时，`stop` 必须报错、以非零退出码结束，并清理残留 pidfile。
 
-守护进程的 stdout/stderr 必须写入配置目录下的日志文件，不得写入调用方的终端。
+守护进程的 stdout/stderr 必须写入配置目录下的日志文件，不得写入调用方的终端；守护模式下 API key 只打印到调用方终端的 stdout（由父进程打印），必须不得出现在日志文件中。
 
 #### Scenario: start 写入 pidfile 并打印地址
 
 - **WHEN** 用户执行 `agent-cli token-server start` 且存在激活 profile、端口可用
 - **THEN** 服务器在后台启动，`token-server.pid` 含 `pid`/`host`/`port`，命令打印监听地址并以退出码 0 结束
+
+#### Scenario: start 输出 baseUrl 与 API key
+
+- **WHEN** 用户执行 `agent-cli token-server start` 且启动成功（后台或 `--foreground`）
+- **THEN** stdout 打印监听地址、OpenAI 兼容 baseUrl（`…/v1`）、Anthropic 兼容 baseUrl（`…/anthropic`）与服务器 API key；日志文件不包含 API key
 
 #### Scenario: start 在已运行时失败
 

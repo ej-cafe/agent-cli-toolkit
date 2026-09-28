@@ -48,8 +48,22 @@ async function listen(server: Server, port: number): Promise<number> {
   return address.port;
 }
 
+/** 打印客户端所需的连接信息：两个 baseUrl 约定与服务器 API key。 */
+function printBaseUrlAndKey(host: string, port: number): void {
+  const key = readApiKey();
+  if (key === undefined) {
+    return;
+  }
+  process.stdout.write(`OpenAI 兼容 baseUrl: http://${host}:${port}/v1\n`);
+  process.stdout.write(`Anthropic 兼容 baseUrl: http://${host}:${port}/anthropic\n`);
+  process.stdout.write(`apiKey: ${key}\n`);
+}
+
 /** 前台运行服务器：监听成功后写 pidfile，收到 SIGTERM/SIGINT 时清理并退出。 */
-export async function runForeground(port: number): Promise<number> {
+export async function runForeground(
+  port: number,
+  printCredentials = false,
+): Promise<number> {
   const server = createTokenServer({
     resolveProfile: resolveActiveProfile,
     resolveApiKey: readApiKey,
@@ -66,6 +80,9 @@ export async function runForeground(port: number): Promise<number> {
   process.stdout.write(
     `token-server 正在监听 http://${serverHost}:${boundPort}\n`,
   );
+  if (printCredentials) {
+    printBaseUrlAndKey(serverHost, boundPort);
+  }
 
   await new Promise<void>((resolve) => {
     const shutdown = (): void => {
@@ -110,7 +127,11 @@ export async function startDaemon(port: number): Promise<number> {
         "--port",
         String(port),
       ],
-      { detached: true, stdio: ["ignore", logFd, logFd] },
+      {
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+        env: { ...process.env, AGENT_CLI_TOKEN_SERVER_DAEMON_CHILD: "1" },
+      },
     );
   } finally {
     closeSync(logFd);
@@ -129,6 +150,7 @@ export async function startDaemon(port: number): Promise<number> {
       process.stdout.write(
         `token-server 正在监听 http://${info.host}:${info.port}（pid ${info.pid}）\n`,
       );
+      printBaseUrlAndKey(info.host, info.port);
       return 0;
     }
     if (child.exitCode !== null || child.signalCode !== null) {

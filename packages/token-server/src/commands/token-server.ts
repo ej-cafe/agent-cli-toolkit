@@ -52,7 +52,8 @@ async function runStart(args: string[]): Promise<number> {
     fail("尚未生成 token-server API key；请先执行: agent-cli token-server gen-api-key");
   }
   if (values.foreground) {
-    return runForeground(port);
+    const daemonChild = process.env.AGENT_CLI_TOKEN_SERVER_DAEMON_CHILD === "1";
+    return runForeground(port, !daemonChild);
   }
   return startDaemon(port);
 }

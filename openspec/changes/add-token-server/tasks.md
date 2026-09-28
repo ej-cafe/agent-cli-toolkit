@@ -26,6 +26,7 @@
 - [x] 4.3 实现 `start`（守护）：以 `spawn(process.execPath, [...process.execArgv, process.argv[1], "token-server", "start", "--foreground", "--port", String(port)], { detached: true, stdio: ["ignore", logFd, logFd] })` 启动并 `unref()`，stdio 指向 `<configDir>/token-server.log`，轮询 pidfile 就绪（约 5s 超时，子进程早退即失败并打印日志尾）；pidfile 内 pid 存活时报错「已在运行」；端口占用时退出 1 且不留下 pidfile；验证：单测/集成覆盖就绪、已运行、端口占用三种情形
 - [x] 4.4 实现 `stop`：读 pidfile 后发 `SIGTERM` 并等待退出（超时则 `SIGKILL`），清理 pidfile 并退出 0；无 pidfile 或 pid 不存活时报错、退出 1，并清理残留 pidfile；验证：单测覆盖终止成功与未运行两种情形
 - [x] 4.5 集成冒烟：临时 `XDG_CONFIG_HOME` + 本机 mock 上游，前台子进程跑 `token-server start --foreground --port 0`，读 pidfile 得到端口，发起转发请求验证凭据注入与响应透传，再用 `token-server stop` 终止并确认 pidfile 被清理；验证：该用例在 `pnpm test` 中通过
+- [x] 4.6 `start`（后台与 `--foreground`）启动成功时在 stdout 打印监听地址、OpenAI 兼容 baseUrl（`…/v1`）、Anthropic 兼容 baseUrl（`…/anthropic`）与 API key；守护子进程（`AGENT_CLI_TOKEN_SERVER_DAEMON_CHILD=1`）不打印 key，key 不写入 `token-server.log`；验证：lifecycle 集成测试断言前台/守护 stdout 含 baseUrl 与 key、日志不含 key，`pnpm test` 通过
 
 ## 5. 帮助与文档
 
