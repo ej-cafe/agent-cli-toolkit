@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/token-config" },
+    { "path": "packages/token-server" },
     { "path": "packages/commands" },
     { "path": "apps/cli" }
   ]

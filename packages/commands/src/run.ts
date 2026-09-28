@@ -1,22 +1,32 @@
 import { parseArgs } from "node:util";
 import { getVersion, toolkitName } from "@agent-cli-toolkit/core";
 import { runTokenCommand, TokenConfigError } from "@agent-cli-toolkit/token-config";
+import { runTokenServerCommand } from "@agent-cli-toolkit/token-server";
 import { printHelp } from "./help.js";
 import { printVersion } from "./version.js";
+
+/** 把命令抛出的 TokenConfigError 收敛为 stderr 一行 + 退出码 1。 */
+async function runGuarded(fn: () => Promise<number>): Promise<number> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof TokenConfigError) {
+      process.stderr.write(`${toolkitName}: ${error.message}\n`);
+      return 1;
+    }
+    throw error;
+  }
+}
 
 export async function run(
   args: string[] = process.argv.slice(2),
 ): Promise<number> {
   if (args[0] === "token") {
-    try {
-      return await runTokenCommand(args.slice(1));
-    } catch (error) {
-      if (error instanceof TokenConfigError) {
-        process.stderr.write(`${toolkitName}: ${error.message}\n`);
-        return 1;
-      }
-      throw error;
-    }
+    return runGuarded(() => runTokenCommand(args.slice(1)));
+  }
+
+  if (args[0] === "token-server") {
+    return runGuarded(() => runTokenServerCommand(args.slice(1)));
   }
 
   const { values } = parseArgs({

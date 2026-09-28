@@ -158,6 +158,9 @@ importers:
       '@agent-cli-toolkit/token-config':
         specifier: workspace:*
         version: link:../token-config
+      '@agent-cli-toolkit/token-server':
+        specifier: workspace:*
+        version: link:../token-server
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -186,6 +189,22 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/token-server:
+    dependencies:
+      '@agent-cli-toolkit/core':
+        specifier: workspace:*
+        version: link:../core
+      '@agent-cli-toolkit/token-config':
+        specifier: workspace:*
+        version: link:../token-config
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

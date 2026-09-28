@@ -71,4 +71,41 @@ describe("printHelp", () => {
     assert.match(stdout, /Kimi 中国站预设/);
     assert.match(stdout, /GLM 中国站 Coding Plan 预设/);
   });
+
+  it("documents the token-server command", () => {
+    let stdout = "";
+    const original = process.stdout.write;
+    process.stdout.write = ((chunk: Uint8Array | string) => {
+      stdout += String(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      printHelp();
+    } finally {
+      process.stdout.write = original;
+    }
+
+    assert.ok(stdout.includes("token-server start"), "missing token-server start");
+    assert.ok(stdout.includes("token-server stop"), "missing token-server stop");
+    assert.ok(
+      stdout.includes("token-server switch <profile>"),
+      "missing token-server switch <profile>",
+    );
+    assert.ok(
+      stdout.includes("token-server use <profile>"),
+      "missing token-server use <profile>",
+    );
+    assert.ok(
+      stdout.includes("token-server gen-api-key"),
+      "missing token-server gen-api-key",
+    );
+    assert.match(stdout, /--foreground/);
+    assert.match(stdout, /--all/);
+    assert.match(stdout, /--tool/);
+    assert.match(stdout, /仅监听 127\.0\.0\.1/);
+    assert.match(stdout, /默认端口 8787/);
+    assert.match(stdout, /--port/);
+    assert.match(stdout, /token-server switch \/ use 选定的激活 profile/);
+    assert.match(stdout, /gen-api-key：服务器对每个请求校验 Authorization: Bearer <key>/);
+  });
 });

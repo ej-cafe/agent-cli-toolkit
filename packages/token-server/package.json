@@ -1,5 +1,5 @@
 {
-  "name": "@agent-cli-toolkit/commands",
+  "name": "@agent-cli-toolkit/token-server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,7 @@
   },
   "dependencies": {
     "@agent-cli-toolkit/core": "workspace:*",
-    "@agent-cli-toolkit/token-config": "workspace:*",
-    "@agent-cli-toolkit/token-server": "workspace:*"
+    "@agent-cli-toolkit/token-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -43,6 +43,8 @@ pnpm --filter @agent-cli-toolkit/cli dev   # 用 tsx 跑源码
 
 token profile（含各自的模型列表）保存在该目录下的 `token-profile.json`。
 
+`token-server` 另用四个文件：`token-server.json`（激活 profile 名）、`token-server.pid`（运行中服务器，`{ pid, host, port }`）、`token-server.log`（守护进程日志）、`token-server.key`（服务器 API key，0600 权限，`gen-api-key` 生成）。
+
 ## 命令总览
 
 ```bash
@@ -52,6 +54,11 @@ agent-cli token list
 agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
 agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 agent-cli token usage [--name <profile>] [--output table|text|raw]
+agent-cli token-server start [--port <port>] [--foreground]
+agent-cli token-server stop
+agent-cli token-server switch <profile>
+agent-cli token-server use <profile> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token-server gen-api-key
 ```
 
 ---
@@ -272,6 +279,40 @@ agent-cli token usage --name ds
 agent-cli token usage --output text
 agent-cli token usage --name kimi-cn --output raw
 ```
+
+---
+
+## `token-server`
+
+本机常驻的凭据注入转发服务器。客户端只需把 baseUrl 指向本机端口，服务器会用 `switch` / `use` 选定的激活 profile 注入凭据并转发到上游；运行中 `switch` 下一个请求即生效，无需改客户端配置或重启客户端。首次使用前必须先执行 `gen-api-key` 生成服务器 API key（写入 `token-server.key`）；服务器对每个请求校验 `Authorization: Bearer <key>`，未生成或 key 不匹配时返回 401，绝不转发凭据到上游。
+
+### 用法
+
+```bash
+agent-cli token-server gen-api-key             # 先生成服务器 API key（仅显示一次，重复执行 = 轮换）
+agent-cli token-server switch <profile>        # 仅设置激活 profile
+agent-cli token-server use <profile> [--all | --tool <id>] [--model <id>]
+#  激活该 profile，并把选中工具的 baseUrl 指向本地服务器、apiKey 写为生成的服务器 key
+#  claude-code / opencode 写 /anthropic，dsh / pi 写 /v1
+agent-cli token-server start                   # 后台启动（默认 127.0.0.1:8787）
+agent-cli token-server start --port <port> [--foreground]
+agent-cli token-server stop                    # 终止并清理 pidfile
+```
+
+### 客户端 baseUrl 约定
+
+| 客户端类型 | baseUrl |
+|------------|---------|
+| OpenAI 兼容 | `http://127.0.0.1:8787/v1` |
+| Anthropic 兼容（Claude Code 等） | `http://127.0.0.1:8787/anthropic` |
+
+服务器按路径路由：以 `/anthropic` 开头的请求转发到激活 profile 的 `claudeBaseUrl`（缺失时回退 `baseUrl`），其余请求转发到 `baseUrl`；查询串、请求方法与请求体原样转发，入站 `authorization` / `x-api-key`（先经服务器 key 校验）会被激活 profile 的 token 替换，绝不把服务器 key 透传给上游。
+
+### 安全边界
+
+- 仅监听本机回环地址 `127.0.0.1`，不接受远程连接；请求必须携带 `Authorization: Bearer <key>`，key 由 `token-server gen-api-key` 生成（重复执行会轮换，旧 key 立即失效）。
+- 未执行 `gen-api-key` 时 `start` / `use` 会直接报错，服务器也不会放行任何请求。
+- 不要在不可信的本机环境下运行；日志、错误响应与帮助文本不包含 token 或 key。
 
 ---
 
