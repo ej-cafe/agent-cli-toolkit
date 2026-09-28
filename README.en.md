@@ -57,7 +57,7 @@ agent-cli token usage [--name <profile>] [--output table|text|raw]
 agent-cli token-server start [--port <port>] [--foreground]
 agent-cli token-server stop
 agent-cli token-server switch <profile>
-agent-cli token-server use <profile> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token-server use [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
 agent-cli token-server gen-api-key
 ```
 
@@ -292,9 +292,9 @@ A local credential-injecting forward proxy. Point a client’s baseUrl at the lo
 ```bash
 agent-cli token-server gen-api-key             # generate the server API key first (printed once; re-running rotates it)
 agent-cli token-server switch <profile>        # only set the active profile
-agent-cli token-server use <profile> [--all | --tool <id>] [--model <id>]
-#  activates the profile and points the selected tools at the local server,
-#  writing the generated server key as the apiKey
+agent-cli token-server use [--all | --tool <id>] [--model <id>]
+#  based on the active profile set by `switch`, points the selected tools at the local server,
+#  writing the generated server key as the apiKey (does not change the active profile)
 #  claude-code / opencode → /anthropic, dsh / pi → /v1
 agent-cli token-server start                   # run in the background (default 127.0.0.1:8787; on success it prints both baseUrls and the apiKey)
 agent-cli token-server start --port <port> [--foreground]

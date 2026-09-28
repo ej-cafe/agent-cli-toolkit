@@ -48,15 +48,16 @@
 - [x] 7.4 `start` 前置校验补 key：激活 profile 校验之后、启动之前检查 `readApiKey()`，未生成时报错提示 `gen-api-key` 且不启动；同时 `runForeground` 以 `resolveApiKey: readApiKey` 装配服务器；验证：`command.test.ts` 断言报错文案与无 pidfile，`lifecycle.test.ts` 集成用例带 key 启动并通过
 - [x] 7.5 拦截入站带 key 的请求的既有测试迁移：全部 `server.test.ts` / `lifecycle.test.ts` 请求补 `Authorization: Bearer <key>`，并新增「服务器 key 不上游、401/503/502 后不调上游」断言；验证：`pnpm test` 全量通过
 
-## 8. use 指令（激活 + 指向本地服务器）
+## 8. use 指令（基于激活 profile 指向本地服务器）
 
 - [x] 8.1 `packages/token-config/src/index.ts` 增加导出 `applyClaudeCode` / `applyDsh` / `applyOpenCode` / `applyPi` / `inspectTool` / `skipMessage` / `toolLabel` 与类型 `AgentTool` / `ToolAbsence` / `ToolPresence`（不改行为）；验证：`pnpm typecheck` 通过，token-config 既有测试不变
-- [x] 8.2 新增 `src/use.ts`：`runTokenServerUse(args)`——`--all` / `--tool`（可重复） / 交互问答三选一（语义与 `token use` 一致），`--model <id>` 校验（id 属于 profile 且仅对 claude-code/dsh/pi 生效），端口取 pidfile 的 `port` 否则 8787，构造合成 profile（token = 生成的 key，baseUrl = `…/v1`，claudeBaseUrl = `…/anthropic`），`inspectTool` 跳过缺失工具，全部成功后 `writeActiveProfile`；验证：`use.test.ts` 覆盖激活 + 四工具写入、运行中端口、未生成 key、缺失 profile、未知模型、跳过缺失工具
-- [x] 8.3 在 `commands/token-server.ts` 注册 `use` 分发并更新 usage 文案；验证：`command.test.ts` 断言 usage 含 `use` / `gen-api-key`
-- [x] 8.4 更新 `packages/commands/src/help.ts` 与 `help.test.ts`：用法行补充 `use` / `gen-api-key`，说明 API key 鉴权；README 中/英补 `gen-api-key` / `use` 用法与安全边界（无 token 与 key 泄露）；验证：`help.test.ts` 与 `pnpm test` 全量通过
+- [x] 8.2 新增 `src/use.ts`：`runTokenServerUse(args)`——不接收 profile 位置参数（多余位置参数报错），基于 `switch` 确定的激活 profile（名字 + 模型列表），无激活 profile 时报错提示 `switch <profile>`；`--all` / `--tool`（可重复） / 交互问答三选一（语义与 `token use` 一致），`--model <id>` 校验（id 属于激活 profile 且仅对 claude-code/dsh/pi 生效），端口取 pidfile 的 `port` 否则 8787，构造合成 profile（token = 生成的 key，baseUrl = `…/v1`，claudeBaseUrl = `…/anthropic`），`inspectTool` 跳过缺失工具，不调用 `writeActiveProfile`（激活值保持不变）；验证：`use.test.ts` 覆盖四工具写入 + 激活值不变、运行中端口、未生成 key、无激活 profile、激活 profile 被删除、多余位置参数、未知模型、跳过缺失工具
+- [x] 8.3 在 `commands/token-server.ts` 注册 `use` 分发并更新 usage 文案（去掉 `<profile>` 参数）；验证：`command.test.ts` 断言 usage 含 `use` / `gen-api-key`
+- [x] 8.4 更新 `packages/commands/src/help.ts` 与 `help.test.ts`：用法行补充 `use` / `gen-api-key`，说明 API key 鉴权与 use 不设定激活 profile；README 中/英补 `gen-api-key` / `use` 用法与安全边界（无 token 与 key 泄露）；验证：`help.test.ts` 与 `pnpm test` 全量通过
 
 ## 9. 变更收敛与验证
 
 - [x] 9.1 更新 `proposal.md` / `spec.md` / `design.md`：新增 API key 鉴权与 `use` 的 requirement / 场景 / 决策，移除「不做鉴权」非目标；验证：`openspec validate add-token-server` 通过
 - [x] 9.2 仓库根 `pnpm typecheck` 与 `pnpm test` 全量通过（含新增 key / use / 生命周期用例）
 - [x] 9.3 项目内冒烟（可选，需真实 profile）：`gen-api-key` → `start` → 无 key 请求 401 → 带 key 请求转发 → `use --all` 写配置 → 轮换后旧 key 401；无合适凭据时记录为待验收项
+- [x] 9.4 use 语义收敛：`use` 不再接收 `<profile>` 参数、不再写激活值，改为基于 `switch` 确定的激活 profile；同步 `spec.md`（use 需求/场景、激活 profile 需求、帮助信息）、`proposal.md`、`help.ts` 与 README 中/英、`use.test.ts`（8 条）、`help.test.ts`；验证：`use.test.ts` / `help.test.ts` / `pnpm test` 全量通过，`openspec validate add-token-server` 通过

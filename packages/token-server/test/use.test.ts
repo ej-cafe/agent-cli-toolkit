@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { TokenConfigError } from "@agent-cli-toolkit/token-config";
 import { runTokenServerCommand } from "../src/commands/token-server.js";
 import { writePidFile } from "../src/pidfile.js";
-import { readActiveProfile } from "../src/state.js";
+import { readActiveProfile, writeActiveProfile } from "../src/state.js";
 import {
   installApiKey,
   profile,
@@ -133,17 +133,18 @@ describe("token-server use", () => {
     }
   });
 
-  it("activates the profile and points every ready tool at the local server with the generated key", async () => {
+  it("points every ready tool at the local server with the generated key, using the active profile", async () => {
     const { home, dshHome, piDir } = installAllTools();
     installApiKey("use-key-123");
+    writeActiveProfile("work");
 
     const result = await capture(() =>
-      runTokenServerCommand(["use", "work", "--all"]),
+      runTokenServerCommand(["use", "--all"]),
     );
     assert.equal(result.code, 0, result.stderr);
     assert.match(
       result.stdout,
-      /已激活 profile work 并写入配置: claude-code, opencode, DeepSeek Harness（dsh）, pi/,
+      /已写入配置（profile work）: claude-code, opencode, DeepSeek Harness（dsh）, pi/,
     );
     assert.equal(readActiveProfile(), "work");
 
@@ -178,9 +179,10 @@ describe("token-server use", () => {
     installAllTools();
     installApiKey("use-key-123");
     writePidFile({ pid: process.pid, host: "127.0.0.1", port: 9999 });
+    writeActiveProfile("work");
 
     const result = await capture(() =>
-      runTokenServerCommand(["use", "work", "--all"]),
+      runTokenServerCommand(["use", "--all"]),
     );
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /token-server 地址: http:\/\/127\.0\.0\.1:9999/);
@@ -191,24 +193,39 @@ describe("token-server use", () => {
     assert.equal(opencode.provider.work.options.baseURL, "http://127.0.0.1:9999/anthropic");
   });
 
-  it("refuses to run before an api key exists and leaves activation untouched", async () => {
+  it("refuses to run before an api key exists and leaves the active profile untouched", async () => {
     installAllTools();
+    writeActiveProfile("work");
 
     await assert.rejects(
-      () => runTokenServerCommand(["use", "work", "--all"]),
+      () => runTokenServerCommand(["use", "--all"]),
       (error: unknown) => {
         assert.ok(error instanceof TokenConfigError);
         assert.match(error.message, /gen-api-key/);
         return true;
       },
     );
+    assert.equal(readActiveProfile(), "work");
+  });
+
+  it("rejects use when no profile is active", async () => {
+    installApiKey();
+    await assert.rejects(
+      () => runTokenServerCommand(["use", "--all"]),
+      (error: unknown) => {
+        assert.ok(error instanceof TokenConfigError);
+        assert.match(error.message, /switch/);
+        return true;
+      },
+    );
     assert.equal(readActiveProfile(), undefined);
   });
 
-  it("rejects a missing profile", async () => {
+  it("rejects use when the active profile was deleted", async () => {
     installApiKey();
+    writeActiveProfile("missing");
     await assert.rejects(
-      () => runTokenServerCommand(["use", "missing", "--all"]),
+      () => runTokenServerCommand(["use", "--all"]),
       (error: unknown) => {
         assert.ok(error instanceof TokenConfigError);
         assert.match(error.message, /profile 不存在: missing/);
@@ -217,10 +234,10 @@ describe("token-server use", () => {
     );
   });
 
-  it("rejects use without a profile argument", async () => {
+  it("rejects extra positional arguments", async () => {
     installApiKey();
     await assert.rejects(
-      () => runTokenServerCommand(["use"]),
+      () => runTokenServerCommand(["use", "work"]),
       (error: unknown) => {
         assert.ok(error instanceof TokenConfigError);
         assert.match(error.message, /用法/);
@@ -232,17 +249,18 @@ describe("token-server use", () => {
   it("rejects an unknown --model without writing anything", async () => {
     installAllTools();
     installApiKey("use-key-123");
+    writeActiveProfile("work");
 
     await assert.rejects(
       () =>
-        runTokenServerCommand(["use", "work", "--all", "--model", "nope"]),
+        runTokenServerCommand(["use", "--all", "--model", "nope"]),
       (error: unknown) => {
         assert.ok(error instanceof TokenConfigError);
         assert.match(error.message, /未知模型: nope/);
         return true;
       },
     );
-    assert.equal(readActiveProfile(), undefined);
+    assert.equal(readActiveProfile(), "work");
     assert.equal(
       existsSync(
         join(process.env.XDG_CONFIG_HOME!, "opencode", "opencode.json"),
@@ -251,7 +269,7 @@ describe("token-server use", () => {
     );
   });
 
-  it("skips missing tools, still activates, and writes only ready tools", async () => {
+  it("skips missing tools and writes only ready tools", async () => {
     const opencodeDir = join(process.env.XDG_CONFIG_HOME!, "opencode");
     mkdirSync(opencodeDir, { recursive: true });
     const home = tempDir();
@@ -262,14 +280,15 @@ describe("token-server use", () => {
     stubExecutable(bin, "opencode");
     setEnv("PATH", bin);
     installApiKey("use-key-123");
+    writeActiveProfile("work");
 
     const result = await capture(() =>
-      runTokenServerCommand(["use", "work", "--all"]),
+      runTokenServerCommand(["use", "--all"]),
     );
     assert.equal(result.code, 0, result.stderr);
     assert.match(
       result.stdout,
-      /已激活 profile work 并写入配置: opencode/,
+      /已写入配置（profile work）: opencode/,
     );
     assert.match(result.stderr, /跳过 claude-code/);
     assert.match(result.stderr, /跳过 DeepSeek Harness（dsh）/);

@@ -117,19 +117,19 @@
 
 ### 10. `use` 命令复用 `token-config` 的 apply 逻辑
 
-`token-server use <profile>` 的执行顺序：
-1. `getProfile(name)`（缺失 → `TokenConfigError`）。
-2. `readApiKey()`（缺失 → 报错提示 `gen-api-key`）。
-3. 选择工具（`--all` / `--tool` 重复标志 / 交互问答，语义与 `token use` 一致）。
-4. 端口 = pidfile 的 `port`（存在）否则 8787；构造合成 profile（见决策 8）。
-5. `inspectTool` 过滤：缺失工具跳过（stderr 提示），不创建目录、不改写现有文件。
-6. `resolveModel` 校验（与 `token use` 相同：id 属于 profile 且至少一个模型型工具存在）。
-7. 对就绪工具调用 `applyClaudeCode` / `applyOpenCode` / `applyDsh` / `applyPi`。
-8. 全部成功后才 `writeActiveProfile(name)`。
+`token-server use`（无位置参数）的执行顺序：
+1. 校验无多余位置参数；`readActiveProfile()` 取激活 profile 名（无激活 → 报错提示 `switch <profile>`）。
+2. `getProfile(name)`（激活名对应的 profile 已被删除 → `TokenConfigError`）。
+3. `readApiKey()`（缺失 → 报错提示 `gen-api-key`）。
+4. 选择工具（`--all` / `--tool` 重复标志 / 交互问答，语义与 `token use` 一致）。
+5. 端口 = pidfile 的 `port`（存在）否则 8787；构造合成 profile（见决策 8）。
+6. `inspectTool` 过滤：缺失工具跳过（stderr 提示），不创建目录、不改写现有文件。
+7. `resolveModel` 校验（与 `token use` 相同：id 属于激活 profile 且至少一个模型型工具存在）。
+8. 对就绪工具调用 `applyClaudeCode` / `applyOpenCode` / `applyDsh` / `applyPi`；不调用 `writeActiveProfile`（激活值保持不变）。
 
 pi 的 `defaultModel` 取 `--model ?? profile.models[0]?.id`（空模型列表时报错），与 `token use` 一致。
 
-**理由：** 一个命令完成「激活 + 写配置」避免两步误操作（先 switch 忘 use，或 use 忘了 switch）；写入失败不落激活值，保持可重试。
+**理由：** `use` 只负责把工具指向本地服务器，激活由 `switch` 单一负责：不用记忆「use 里那个 profile 参数」，模型列表也始终取 switch 确定的那个，避免 use 与 switch 各自带 profile 时语义分裂；同时 use 不写激活值，写入失败不影响后续重试。
 
 ## Risks / Trade-offs
 

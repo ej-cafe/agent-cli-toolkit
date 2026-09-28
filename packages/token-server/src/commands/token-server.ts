@@ -15,7 +15,7 @@ const usageText = [
   "  agent-cli token-server start [--port <port>] [--foreground]",
   "  agent-cli token-server stop",
   "  agent-cli token-server switch <profile>",
-  "  agent-cli token-server use <profile> [--all | --tool <id>] [--model <id>]",
+  "  agent-cli token-server use [--all | --tool <id>] [--model <id>]",
   "  agent-cli token-server gen-api-key",
 ].join("\n");
 

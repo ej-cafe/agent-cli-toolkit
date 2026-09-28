@@ -17,7 +17,7 @@ import { fail } from "./errors.js";
 import { readApiKey } from "./key.js";
 import { serverHost } from "./lifecycle.js";
 import { readPidFile } from "./pidfile.js";
-import { writeActiveProfile } from "./state.js";
+import { readActiveProfile } from "./state.js";
 
 const supportedTools: AgentTool[] = ["claude-code", "opencode", "dsh", "pi"];
 const defaultPort = 8787;
@@ -191,15 +191,16 @@ export async function runTokenServerUse(args: string[]): Promise<number> {
   });
 
   const usage =
-    "用法: agent-cli token-server use <profile> [--all | --tool <id>] [--model <id>]";
-  const name = positionals[0]?.trim();
-  if (!name) {
-    fail(usage);
-  }
-  if (positionals.length > 1) {
+    "用法: agent-cli token-server use [--all | --tool <id>] [--model <id>]";
+  if (positionals.length > 0) {
     fail(usage);
   }
 
+  // use 不设定 profile：基于 switch 已确定的激活 profile（名字与模型列表）。
+  const name = readActiveProfile();
+  if (name === undefined) {
+    fail("没有可用的激活 profile；请先执行: agent-cli token-server switch <profile>");
+  }
   const profile = getProfile(name);
   const apiKey = readApiKey();
   if (apiKey === undefined) {
@@ -225,14 +226,12 @@ export async function runTokenServerUse(args: string[]): Promise<number> {
   const modelId = resolveModel(name, values.model, ready, profile);
   applyTools(name, local, ready, modelId);
 
-  writeActiveProfile(name);
-
   for (const item of skipped) {
     process.stderr.write(`${skipMessage(item.tool, item.absence)}\n`);
   }
   if (ready.length > 0) {
     process.stdout.write(
-      `已激活 profile ${name} 并写入配置: ${ready.map(toolLabel).join(", ")}\n`,
+      `已写入配置（profile ${name}）: ${ready.map(toolLabel).join(", ")}\n`,
     );
   }
   process.stdout.write(`token-server 地址: http://${serverHost}:${port}\n`);

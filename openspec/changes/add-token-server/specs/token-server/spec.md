@@ -6,7 +6,7 @@
 
 ### Requirement: 提供 token-server 命令
 
-`agent-cli` 必须提供顶层命令 `token-server`，含子命令 `start`、`stop`、`switch <profile>`、`use <profile>`、`gen-api-key`。`token-server start` 必须接受可选的 `--port <port>` 与 `--foreground`。缺少子命令或给出未知子命令时，必须在 stderr 打印用法并以非零退出码结束。
+`agent-cli` 必须提供顶层命令 `token-server`，含子命令 `start`、`stop`、`switch <profile>`、`use`、`gen-api-key`。`token-server start` 必须接受可选的 `--port <port>` 与 `--foreground`。缺少子命令或给出未知子命令时，必须在 stderr 打印用法并以非零退出码结束。
 
 #### Scenario: 分发 start
 
@@ -25,8 +25,8 @@
 
 #### Scenario: 分发 use
 
-- **WHEN** 用户执行 `agent-cli token-server use <profile>`
-- **THEN** 系统激活该 profile，并把选中工具的配置指向本地服务器
+- **WHEN** 用户执行 `agent-cli token-server use [--all | --tool <id>] [--model <id>]`
+- **THEN** 系统基于当前激活 profile 把选中工具的配置指向本地服务器
 
 #### Scenario: 分发 gen-api-key
 
@@ -109,7 +109,7 @@
 
 系统必须把激活 profile 名称持久化到配置目录下 `token-server.json` 的 `activeProfile` 字段。
 
-`token-server switch <profile>` 必须在 profile 存在时写入该字段并以退出码 0 结束；profile 不存在时必须报错、以非零退出码结束，且不得改变原有激活值。`token-server use <profile>` 也必须在工具配置全部应用成功后写入该字段（见「use 命令」）。
+`token-server switch <profile>` 必须在 profile 存在时写入该字段并以退出码 0 结束；profile 不存在时必须报错、以非零退出码结束，且不得改变原有激活值。`token-server use` 不得改变该字段（见「use 命令」）。
 
 运行中的服务器必须在每次请求时读取当前激活 profile 及其内容（每次请求都反映磁盘上的最新值），使切换后的下一个请求即使用新的 profile，无需重启服务器。
 
@@ -141,7 +141,7 @@
 
 运行中的服务器必须在每次请求时重新读取 `token-server.key` 并校验入站 `Authorization: Bearer <key>`（缺失或不匹配 → 401 且不发起上游请求，见「本地转发服务器」），使轮换后的下一个请求立即生效；key 不得出现在日志、错误响应或帮助文本中。
 
-`token-server start`、`start --foreground` 与 `token-server use <profile>` 在尚未生成 API key 时必须以非零退出码报错，提示先执行 `agent-cli token-server gen-api-key`，且不得启动服务器或改写任何工具配置。
+`token-server start`、`start --foreground` 与 `token-server use` 在尚未生成 API key 时必须以非零退出码报错，提示先执行 `agent-cli token-server gen-api-key`，且不得启动服务器或改写任何工具配置。
 
 #### Scenario: gen-api-key 生成并持久化
 
@@ -165,31 +165,38 @@
 
 ### Requirement: use 命令
 
-`token-server use <profile>` 必须一个命令完成两件事：把该 profile 设为激活 profile（等同 `switch`），并把选中的工具配置为指向本地服务器。工具选择必须与 `token use` 语义一致：`--all` 选择全部支持的四种工具；一个或多个 `--tool <id>` 选择指定工具（`claude-code` / `opencode` / `dsh` / `pi`）；两者都没有时以交互问答选择（编号或 id，逗号/空格分隔）。未知工具 id 或空选择必须报错。
+`token-server use` 必须不接收任何 profile 位置参数（给出多余位置参数时必须报错），并且必须不改变当前激活 profile 值；它基于 `switch` 已确定的激活 profile（名字与其模型列表）把选中的工具配置为指向本地服务器。没有激活 profile 时必须以非零退出码报错，提示先执行 `token-server switch <profile>`。激活 profile 名对应的 profile 已被删除，或尚未生成 API key（提示 `gen-api-key`）时，也必须以非零退出码报错且不得改写任何工具配置。
 
-`use` 必须先校验 profile 存在（`getProfile`，缺失时报错）与已生成 API key（缺失时报错并提示 `gen-api-key`）。工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 与 OpenCode 写入 `http://127.0.0.1:<端口>/anthropic`，dsh 与 pi 写入 `http://127.0.0.1:<端口>/v1`；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
+工具选择必须与 `token use` 语义一致：`--all` 选择全部支持的四种工具；一个或多个 `--tool <id>` 选择指定工具（`claude-code` / `opencode` / `dsh` / `pi`）；两者都没有时以交互问答选择（编号或 id，逗号/空格分隔）。未知工具 id 或空选择必须报错。
 
-`use` 的 `--model <id>` 必须与 `token use` 校验规则一致：id 必须属于该 profile 且仅对 Claude Code、dsh、pi 生效，否则报错。存在但不可用的工具（配置目录不存在、程序不在 `PATH`）必须跳过，不得创建其配置目录或改写其现有文件，并在 stderr 提示；全部工具都被跳过时仍以退出码 0 结束。`use` 必须在工具全部应用成功后才把该 profile 写为激活 profile，保证配置写入失败时激活值不被改写。
+工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 与 OpenCode 写入 `http://127.0.0.1:<端口>/anthropic`，dsh 与 pi 写入 `http://127.0.0.1:<端口>/v1`；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
 
-#### Scenario: use 激活并写入全部工具
+`use` 的 `--model <id>` 必须与 `token use` 校验规则一致：id 必须属于激活 profile 的模型列表且仅对 Claude Code、dsh、pi 生效，否则报错。存在但不可用的工具（配置目录不存在、程序不在 `PATH`）必须跳过，不得创建其配置目录或改写其现有文件，并在 stderr 提示；全部工具都被跳过时仍以退出码 0 结束。
 
-- **WHEN** 四种工具齐全，用户执行 `agent-cli token-server use work --all`
-- **THEN** `activeProfile` 为 `work`，Claude Code / OpenCode 的 baseUrl 为 `http://127.0.0.1:8787/anthropic`、dsh / pi 的 baseUrl 为 `http://127.0.0.1:8787/v1`，凭据均为生成的服务器 key
+#### Scenario: use 基于激活 profile 写入全部工具
+
+- **WHEN** 激活 profile 为 `work`、四种工具齐全，用户执行 `agent-cli token-server use --all`
+- **THEN** Claude Code / OpenCode 的 baseUrl 为 `http://127.0.0.1:8787/anthropic`、dsh / pi 的 baseUrl 为 `http://127.0.0.1:8787/v1`，凭据均为生成的服务器 key，且 `activeProfile` 仍为 `work`（未被改变）
 
 #### Scenario: use 使用运行中服务器的端口
 
-- **WHEN** 服务器正在运行（pidfile 的 `port` 为 9999），用户执行 `agent-cli token-server use work --all`
+- **WHEN** 服务器正在运行（pidfile 的 `port` 为 9999），激活 profile 为 `work`，用户执行 `agent-cli token-server use --all`
 - **THEN** 工具写入的 baseUrl 使用端口 9999
 
 #### Scenario: use 未生成 key 时报错
 
-- **WHEN** 尚未执行 `gen-api-key`，用户执行 `agent-cli token-server use work --all`
+- **WHEN** 尚未执行 `gen-api-key`，激活 profile 为 `work`，用户执行 `agent-cli token-server use --all`
 - **THEN** 系统报错提示先执行 `gen-api-key`，以非零退出码结束，且不改写激活 profile 与任何工具配置
+
+#### Scenario: use 无激活 profile 时报错
+
+- **WHEN** 尚未执行 `switch`，用户执行 `agent-cli token-server use --all`
+- **THEN** 系统报错提示先执行 `token-server switch <profile>`，以非零退出码结束
 
 #### Scenario: use 跳过缺失工具
 
-- **WHEN** 部分工具目录或程序缺失，用户执行 `agent-cli token-server use work --all`
-- **THEN** 系统跳过缺失工具（stderr 提示、不创建其配置目录），写入其余工具并把 profile 设为激活
+- **WHEN** 激活 profile 为 `work`、部分工具目录或程序缺失，用户执行 `agent-cli token-server use --all`
+- **THEN** 系统跳过缺失工具（stderr 提示、不创建其配置目录），写入其余工具，且 `activeProfile` 保持不变
 
 ### Requirement: start 与 stop 的进程生命周期
 
@@ -238,12 +245,12 @@
 
 ### Requirement: 帮助信息列出 token-server 命令
 
-`agent-cli --help` 必须说明 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use <profile>` 与 `token-server gen-api-key`，并说明服务器仅监听本机、默认端口 `8787`（`--port` 可覆盖）、`--foreground`、服务器使用 `switch` / `use` 选定的激活 profile，以及首次使用前必须 `gen-api-key` 且服务器校验 `Authorization: Bearer <key>`。
+`agent-cli --help` 必须说明 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use` 与 `token-server gen-api-key`，并说明服务器仅监听本机、默认端口 `8787`（`--port` 可覆盖）、`--foreground`、服务器使用 `switch` / `use` 选定的激活 profile，以及首次使用前必须 `gen-api-key` 且服务器校验 `Authorization: Bearer <key>`。
 
 #### Scenario: 帮助列出 token-server 命令
 
 - **WHEN** 用户执行 `agent-cli --help`
-- **THEN** 输出包含 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use <profile>` 与 `token-server gen-api-key`
+- **THEN** 输出包含 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use` 与 `token-server gen-api-key`
 
 #### Scenario: 帮助说明默认端口与监听
 

@@ -57,7 +57,7 @@ agent-cli token usage [--name <profile>] [--output table|text|raw]
 agent-cli token-server start [--port <port>] [--foreground]
 agent-cli token-server stop
 agent-cli token-server switch <profile>
-agent-cli token-server use <profile> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token-server use [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
 agent-cli token-server gen-api-key
 ```
 
@@ -291,9 +291,9 @@ agent-cli token usage --name kimi-cn --output raw
 ```bash
 agent-cli token-server gen-api-key             # 先生成服务器 API key（仅显示一次，重复执行 = 轮换）
 agent-cli token-server switch <profile>        # 仅设置激活 profile
-agent-cli token-server use <profile> [--all | --tool <id>] [--model <id>]
-#  激活该 profile，并把选中工具的 baseUrl 指向本地服务器、apiKey 写为生成的服务器 key
-#  claude-code / opencode 写 /anthropic，dsh / pi 写 /v1
+agent-cli token-server use [--all | --tool <id>] [--model <id>]
+#  基于 switch 确定的激活 profile，把选中工具的 baseUrl 指向本地服务器、apiKey 写为生成的服务器 key
+#  （不设定激活值；claude-code / opencode 写 /anthropic，dsh / pi 写 /v1）
 agent-cli token-server start                   # 后台启动（默认 127.0.0.1:8787；启动成功会打印两个 baseUrl 与 apiKey）
 agent-cli token-server start --port <port> [--foreground]
 agent-cli token-server stop                    # 终止并清理 pidfile

@@ -92,8 +92,8 @@ describe("printHelp", () => {
       "missing token-server switch <profile>",
     );
     assert.ok(
-      stdout.includes("token-server use <profile>"),
-      "missing token-server use <profile>",
+      stdout.includes("token-server use [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]"),
+      "missing token-server use usage",
     );
     assert.ok(
       stdout.includes("token-server gen-api-key"),
@@ -105,7 +105,7 @@ describe("printHelp", () => {
     assert.match(stdout, /仅监听 127\.0\.0\.1/);
     assert.match(stdout, /默认端口 8787/);
     assert.match(stdout, /--port/);
-    assert.match(stdout, /token-server switch \/ use 选定的激活 profile/);
+    assert.match(stdout, /token-server switch 选定的激活 profile/);
     assert.match(stdout, /gen-api-key：服务器对每个请求校验 Authorization: Bearer <key>/);
   });
 });

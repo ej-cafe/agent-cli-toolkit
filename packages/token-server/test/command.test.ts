@@ -66,7 +66,7 @@ describe("token-server command dispatch", () => {
     assert.match(result.stderr, /token-server start/);
     assert.match(result.stderr, /token-server stop/);
     assert.match(result.stderr, /token-server switch <profile>/);
-    assert.match(result.stderr, /token-server use <profile>/);
+    assert.match(result.stderr, /token-server use \[--all \| --tool <id>\]/);
     assert.match(result.stderr, /token-server gen-api-key/);
   });
 
