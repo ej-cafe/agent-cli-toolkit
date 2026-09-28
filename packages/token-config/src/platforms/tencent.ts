@@ -62,6 +62,18 @@ function checkTencentEnv(): void {
 /** 查询执行器：完成一次 DescribeTokenPlanList 并返回响应根对象。 */
 export type TokenPlanQuery = () => Promise<Record<string, unknown>>;
 
+/** 测试注入钩子：替换 TokenHub client 构造，便于断言 region/凭据。 */
+export type TokenHubClient = {
+  DescribeTokenPlanList(input: Record<string, unknown>): Promise<unknown>;
+};
+export type TokenHubClientFactory = (options: {
+  secretId: string;
+  secretKey: string;
+  region: string;
+}) => TokenHubClient;
+
+let tokenHubClientFactory: TokenHubClientFactory | undefined;
+
 /** SDK 报错不成文地阻止泄漏 SecretKey：只取 code 与 message。 */
 function sdkErrorText(error: unknown): string {
   if (isRecord(error)) {
@@ -79,16 +91,33 @@ function sdkErrorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function defaultTokenPlanQuery(): Promise<Record<string, unknown>> {
+async function createRealTokenHubClient(options: {
+  secretId: string;
+  secretKey: string;
+  region: string;
+}): Promise<TokenHubClient> {
   // 动态导入：仅在查询 tencent 时加载官方 SDK。
   const { tokenhub } = await import("tencentcloud-sdk-nodejs-tokenhub");
   const client = new tokenhub.v20260322.Client({
     credential: {
-      secretId: requiredEnv("TENCENTCLOUD_SECRET_ID") ?? "",
-      secretKey: requiredEnv("TENCENTCLOUD_SECRET_KEY") ?? "",
+      secretId: options.secretId,
+      secretKey: options.secretKey,
     },
-    region: requiredEnv("TENCENTCLOUD_REGION") ?? "ap-guangzhou",
+    region: options.region,
   });
+  return client as unknown as TokenHubClient;
+}
+
+async function defaultTokenPlanQuery(): Promise<Record<string, unknown>> {
+  const options = {
+    secretId: requiredEnv("TENCENTCLOUD_SECRET_ID") ?? "",
+    secretKey: requiredEnv("TENCENTCLOUD_SECRET_KEY") ?? "",
+    region: requiredEnv("TENCENTCLOUD_REGION") ?? "ap-guangzhou",
+  };
+  const client =
+    tokenHubClientFactory !== undefined
+      ? tokenHubClientFactory(options)
+      : await createRealTokenHubClient(options);
 
   const response = await client.DescribeTokenPlanList({});
   if (!isRecord(response)) {
@@ -104,6 +133,14 @@ let tokenPlanPromise: Promise<Record<string, unknown>> | undefined;
 export function setTokenPlanQuery(fn: TokenPlanQuery | undefined): void {
   tokenPlanPromise = undefined;
   tokenPlanQuery = fn ?? defaultTokenPlanQuery;
+}
+
+/** 测试注入钩子：替换 client 构造；传 undefined 恢复真实 SDK（并清空单飞缓存）。 */
+export function setTokenHubClientFactory(
+  fn: TokenHubClientFactory | undefined,
+): void {
+  tokenPlanPromise = undefined;
+  tokenHubClientFactory = fn;
 }
 
 /** 同一轮命令中多个 tencent profile 共享一次查询；任何执行器抛错统一收敛为 TokenConfigError。 */

@@ -8,6 +8,25 @@ import type { OutputFormat, TokenPlatform } from "./platform.js";
 
 const execFileAsync = promisify(execFile);
 
+type BlExecResult = { stdout: string; stderr: string };
+
+/** 测试注入钩子：替换 `bl` 调用；默认真实执行 `bl usage token-plan`。 */
+export type BlUsageExec = () => Promise<BlExecResult>;
+
+const defaultBlUsageExec: BlUsageExec = async () => {
+  const result = await execFileAsync(
+    "bl",
+    ["usage", "token-plan", "--output", "json"],
+    {
+      encoding: "utf8",
+      maxBuffer: 2 * 1024 * 1024,
+    },
+  );
+  return { stdout: result.stdout, stderr: result.stderr };
+};
+
+let blUsageExec: BlUsageExec = defaultBlUsageExec;
+
 function formatPercent(fraction: number): string {
   const percent = Math.round(fraction * 1000) / 10;
   return `${Number.isInteger(percent) ? percent : percent.toFixed(1)}%`;
@@ -126,14 +145,7 @@ async function runBlTokenPlanUsage(): Promise<Record<string, unknown>> {
   let stdout: string;
   let stderr: string;
   try {
-    const result = await execFileAsync(
-      "bl",
-      ["usage", "token-plan", "--output", "json"],
-      {
-        encoding: "utf8",
-        maxBuffer: 2 * 1024 * 1024,
-      },
-    );
+    const result = await blUsageExec();
     stdout = result.stdout;
     stderr = result.stderr;
   } catch (error) {
@@ -202,6 +214,12 @@ async function runBlTokenPlanUsage(): Promise<Record<string, unknown>> {
 
 /** 同一次运行中多个 aliyun profile 共享一次 bl 调用。 */
 let blUsagePromise: Promise<Record<string, unknown>> | undefined;
+
+/** 测试注入钩子：替换 `bl` 执行器；传 undefined 恢复默认并清空单飞缓存。 */
+export function setBlUsageExec(fn: BlUsageExec | undefined): void {
+  blUsagePromise = undefined;
+  blUsageExec = fn ?? defaultBlUsageExec;
+}
 
 async function queryAliyunUsage(): Promise<Record<string, unknown>> {
   blUsagePromise ??= runBlTokenPlanUsage();

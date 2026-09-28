@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { runTokenCommand } from "../src/commands/token.js";
 import { runTokenAdd } from "../src/commands/add.js";
@@ -7,6 +8,7 @@ import { TokenConfigError } from "../src/errors.js";
 import { loadProfiles, saveProfiles } from "../src/store.js";
 import {
   captureStd,
+  captureStdTee,
   jsonResponse,
   mockHttpFetch,
   statusResponse,
@@ -22,6 +24,33 @@ beforeEach(() => {
 afterEach(() => {
   cleanupXdg();
 });
+
+/** 以伪 TTY stdin 驱动交互式问答；返回后恢复 process.stdin。 */
+async function withTty<T>(lines: string[], fn: () => Promise<T>): Promise<T> {
+  const input = new PassThrough();
+  Object.defineProperty(input, "isTTY", { value: true });
+  void (async () => {
+    for (const line of lines) {
+      await new Promise((resolve) => setImmediate(resolve));
+      if (input.destroyed) return;
+      input.write(`${line}\n`);
+    }
+  })();
+  const descriptor = Object.getOwnPropertyDescriptor(process, "stdin");
+  Object.defineProperty(process, "stdin", {
+    configurable: true,
+    get: () => input,
+  });
+  try {
+    return await fn();
+  } finally {
+    input.end();
+    input.destroy();
+    if (descriptor) {
+      Object.defineProperty(process, "stdin", descriptor);
+    }
+  }
+}
 
 describe("runTokenCommand dispatch", () => {
   it("prints usage and exits 1 without a verb", async () => {
@@ -274,6 +303,29 @@ describe("runTokenAdd", () => {
     }
   });
 
+  it("writes tencent enterprise productType from --product-type", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      await runTokenAdd([
+        "--name",
+        "txe",
+        "--platform",
+        "tencent",
+        "--token",
+        "t",
+        "--base-url",
+        "https://example.test/v1",
+        "--product-type",
+        "enterprise",
+      ]);
+      assert.equal(loadProfiles().profiles.txe!.productType, "enterprise");
+    } finally {
+      restore();
+    }
+  });
+
   it("rejects invalid tencent productType without saving", async () => {
     const restore = mockHttpFetch(() =>
       jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
@@ -332,6 +384,62 @@ describe("runTokenAdd", () => {
         /无法获取 bad 模型列表/,
       );
       assert.equal(loadProfiles().profiles.bad, undefined);
+    } finally {
+      restore();
+    }
+  });
+
+  it("fills missing flags interactively and defaults tencent productType", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      const { stdout, code } = await withTty(
+        ["tx", "tencent", "", "t", "https://example.test/v1", ""],
+        () => captureStdTee(() => runTokenAdd([])),
+      );
+      assert.equal(code, 0);
+      assert.match(stdout, /套餐类型（默认 personal/);
+      assert.match(stdout, /已添加 profile: tx/);
+      const saved = loadProfiles().profiles.tx;
+      assert.equal(saved!.platform, "tencent");
+      assert.equal(saved!.productType, "personal");
+    } finally {
+      restore();
+    }
+  });
+
+  it("accepts an interactive tencent productType", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      const { code } = await withTty(
+        ["tx2", "tencent", "enterprise", "t", "https://example.test/v1", ""],
+        () => captureStdTee(() => runTokenAdd([])),
+      );
+      assert.equal(code, 0);
+      assert.equal(loadProfiles().profiles.tx2!.productType, "enterprise");
+    } finally {
+      restore();
+    }
+  });
+
+  it("only asks for missing fields in interactive mode", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      const { stdout, code } = await withTty(
+        ["deepseek", "t", "", ""],
+        () => captureStdTee(() => runTokenAdd(["--name", "p"])),
+      );
+      assert.equal(code, 0);
+      assert.ok(!stdout.includes("名称: "));
+      assert.ok(!stdout.includes("套餐类型"));
+      const saved = loadProfiles().profiles.p;
+      assert.equal(saved!.platform, "deepseek");
+      assert.equal(saved!.baseUrl, "https://api.deepseek.com");
     } finally {
       restore();
     }

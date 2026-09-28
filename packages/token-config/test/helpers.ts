@@ -34,6 +34,17 @@ export function statusResponse(status: number): HttpFetchResponse {
   };
 }
 
+/** ok 响应但 body 不是合法 JSON。 */
+export function invalidJsonResponse(): HttpFetchResponse {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => {
+      throw new SyntaxError("invalid json");
+    },
+  };
+}
+
 class TimeoutFetchError extends Error {
   readonly name = "TimeoutError";
 }
@@ -72,5 +83,40 @@ export async function captureStd(
   } finally {
     process.stdout.write = origStdout;
     process.stderr.write = origStderr;
+  }
+}
+
+/**
+ * 同 captureStd，但把写入透传给原流。交互式用例会跨多个 await，若吞掉 stdout/stderr，
+ * 测试运行器自身的结果输出也会被一并吞掉，导致用例上报丢失。
+ */
+export async function captureStdTee(
+  fn: () => Promise<number>,
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  const writes = { stdout: "", stderr: "" };
+  const rawStdout = process.stdout.write;
+  const rawStderr = process.stderr.write;
+  const origStdout = rawStdout.bind(process.stdout) as unknown as (
+    chunk: string | Uint8Array,
+    ...rest: unknown[]
+  ) => boolean;
+  const origStderr = rawStderr.bind(process.stderr) as unknown as (
+    chunk: string | Uint8Array,
+    ...rest: unknown[]
+  ) => boolean;
+  process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    writes.stdout += String(chunk);
+    return origStdout(chunk, ...rest);
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    writes.stderr += String(chunk);
+    return origStderr(chunk, ...rest);
+  }) as typeof process.stderr.write;
+  try {
+    const code = await fn();
+    return { ...writes, code };
+  } finally {
+    process.stdout.write = rawStdout;
+    process.stderr.write = rawStderr;
   }
 }
