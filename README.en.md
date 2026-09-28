@@ -295,7 +295,7 @@ agent-cli token-server switch <profile>        # only set the active profile
 agent-cli token-server use [--all | --tool <id>] [--model <id>]
 #  based on the active profile set by `switch`, points the selected tools at the local server,
 #  writing the generated server key as the apiKey (does not change the active profile)
-#  claude-code / opencode → /anthropic, dsh / pi → /v1
+#  claude-code → /anthropic, opencode / dsh / pi → /v1
 agent-cli token-server start                   # run in the background (default 127.0.0.1:8787; on success it prints both baseUrls and the apiKey)
 agent-cli token-server start --port <port> [--foreground]
 agent-cli token-server stop                    # terminate and clean up the pidfile

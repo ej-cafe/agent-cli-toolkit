@@ -166,15 +166,19 @@ function applyTools(
     ? (modelId ?? firstModelId(name, profile))
     : undefined;
 
+  // 仅 Claude Code 走 anthropic 兼容端点（claudeBaseUrl）；opencode / dsh / pi 一律走 baseUrl。
+  const openaiProfile: TokenProfile = { ...profile };
+  delete openaiProfile.claudeBaseUrl;
+
   for (const tool of tools) {
     if (tool === "claude-code") {
       applyClaudeCode(profile, modelId);
     } else if (tool === "opencode") {
-      applyOpenCode(name, profile);
+      applyOpenCode(name, openaiProfile);
     } else if (tool === "dsh") {
-      applyDsh(name, profile, modelId);
+      applyDsh(name, openaiProfile, modelId);
     } else if (piModelId !== undefined) {
-      applyPi(name, profile, piModelId);
+      applyPi(name, openaiProfile, piModelId);
     }
   }
 }

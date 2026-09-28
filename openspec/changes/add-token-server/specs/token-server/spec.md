@@ -169,14 +169,14 @@
 
 工具选择必须与 `token use` 语义一致：`--all` 选择全部支持的四种工具；一个或多个 `--tool <id>` 选择指定工具（`claude-code` / `opencode` / `dsh` / `pi`）；两者都没有时以交互问答选择（编号或 id，逗号/空格分隔）。未知工具 id 或空选择必须报错。
 
-工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 与 OpenCode 写入 `http://127.0.0.1:<端口>/anthropic`，dsh 与 pi 写入 `http://127.0.0.1:<端口>/v1`；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
+工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 写 `http://127.0.0.1:<端口>/anthropic`（服务器将其路由到 `claudeBaseUrl`），OpenCode、dsh 与 pi 写 `http://127.0.0.1:<端口>/v1`（路由到 `baseUrl`）；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
 
 `use` 的 `--model <id>` 必须与 `token use` 校验规则一致：id 必须属于激活 profile 的模型列表且仅对 Claude Code、dsh、pi 生效，否则报错。存在但不可用的工具（配置目录不存在、程序不在 `PATH`）必须跳过，不得创建其配置目录或改写其现有文件，并在 stderr 提示；全部工具都被跳过时仍以退出码 0 结束。
 
 #### Scenario: use 基于激活 profile 写入全部工具
 
 - **WHEN** 激活 profile 为 `work`、四种工具齐全，用户执行 `agent-cli token-server use --all`
-- **THEN** Claude Code / OpenCode 的 baseUrl 为 `http://127.0.0.1:8787/anthropic`、dsh / pi 的 baseUrl 为 `http://127.0.0.1:8787/v1`，凭据均为生成的服务器 key，且 `activeProfile` 仍为 `work`（未被改变）
+- **THEN** Claude Code 的 baseUrl 为 `http://127.0.0.1:8787/anthropic`，OpenCode / dsh / pi 的 baseUrl 为 `http://127.0.0.1:8787/v1`，凭据均为生成的服务器 key，且 `activeProfile` 仍为 `work`（未被改变）
 
 #### Scenario: use 使用运行中服务器的端口
 

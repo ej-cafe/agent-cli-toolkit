@@ -159,7 +159,7 @@ describe("token-server use", () => {
       readFileSync(join(process.env.XDG_CONFIG_HOME!, "opencode", "opencode.json"), "utf8"),
     );
     assert.equal(opencode.provider.work.options.apiKey, "use-key-123");
-    assert.equal(opencode.provider.work.options.baseURL, anthropicUrl);
+    assert.equal(opencode.provider.work.options.baseURL, openaiUrl);
 
     const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
     assert.match(settings, /baseURL: http:\/\/127\.0\.0\.1:8787\/v1/);
@@ -190,7 +190,7 @@ describe("token-server use", () => {
     const opencode = JSON.parse(
       readFileSync(join(process.env.XDG_CONFIG_HOME!, "opencode", "opencode.json"), "utf8"),
     );
-    assert.equal(opencode.provider.work.options.baseURL, "http://127.0.0.1:9999/anthropic");
+    assert.equal(opencode.provider.work.options.baseURL, "http://127.0.0.1:9999/v1");
   });
 
   it("refuses to run before an api key exists and leaves the active profile untouched", async () => {
