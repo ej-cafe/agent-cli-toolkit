@@ -69,6 +69,7 @@ export async function runTokenUsage(args: string[]): Promise<number> {
   }
 
   const chunks: string[] = [];
+  const errorLines: string[] = [];
   let failures = 0;
 
   for (const name of targets) {
@@ -84,13 +85,16 @@ export async function runTokenUsage(args: string[]): Promise<number> {
       if (!(error instanceof TokenConfigError)) {
         throw error;
       }
-      process.stderr.write(`${name}: ${error.message}\n`);
+      errorLines.push(`${name}: ${error.message}`);
       failures += 1;
     }
   }
 
   if (chunks.length > 0) {
     process.stdout.write(chunks.join("\n"));
+  }
+  if (errorLines.length > 0) {
+    process.stderr.write(`${errorLines.join("\n\n")}\n`);
   }
   return failures > 0 && chunks.length === 0 ? 1 : 0;
 }

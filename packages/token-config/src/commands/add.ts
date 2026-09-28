@@ -29,6 +29,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
       token: { type: "string" },
       "base-url": { type: "string" },
       "claude-base-url": { type: "string" },
+      "product-type": { type: "string" },
     },
     allowPositionals: false,
   });
@@ -43,6 +44,7 @@ export async function runTokenAdd(args: string[]): Promise<number> {
   let baseUrl = nonempty(values["base-url"]);
   const claudeFlagProvided = values["claude-base-url"] !== undefined;
   let claudeBaseUrl = nonempty(values["claude-base-url"]);
+  let productType = nonempty(values["product-type"]);
 
   const needsBaseUrl = platform?.presets === undefined;
   const missingRequired =
@@ -81,6 +83,15 @@ export async function runTokenAdd(args: string[]): Promise<number> {
           platform = getPlatformOrAlias(
             requireFlag(nonempty(await rl.question("> ")), "--platform"),
           );
+        }
+
+        if (productType === undefined && platform.id === "tencent") {
+          productType =
+            nonempty(
+              await rl.question(
+                "套餐类型（默认 personal 个人版；enterprise / enterprise-auto 企业版）: ",
+              ),
+            ) ?? "personal";
         }
 
         if (token === undefined) {
@@ -122,6 +133,26 @@ export async function runTokenAdd(args: string[]): Promise<number> {
   const resolvedToken = requireFlag(token, "--token");
   const resolvedName = requireFlag(name, "--name");
 
+  const resolvedProductType = (() => {
+    if (resolvedPlatform.id !== "tencent") {
+      if (productType !== undefined) {
+        fail("仅 tencent 平台支持 --product-type");
+      }
+      return undefined;
+    }
+    const value = productType ?? "personal";
+    if (
+      value !== "personal" &&
+      value !== "enterprise" &&
+      value !== "enterprise-auto"
+    ) {
+      fail(
+        `无效的套餐类型: ${value}（tencent 可取 personal、enterprise、enterprise-auto，默认 personal）`,
+      );
+    }
+    return value;
+  })();
+
   const presets = resolvedPlatform.presets;
   let resolvedBaseUrl: string;
   let resolvedClaudeBaseUrl: string | undefined;
@@ -140,6 +171,9 @@ export async function runTokenAdd(args: string[]): Promise<number> {
     baseUrl: resolvedBaseUrl,
     ...(resolvedClaudeBaseUrl
       ? { claudeBaseUrl: resolvedClaudeBaseUrl }
+      : {}),
+    ...(resolvedProductType !== undefined
+      ? { productType: resolvedProductType }
       : {}),
   });
 

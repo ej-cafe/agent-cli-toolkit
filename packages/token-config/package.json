@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@agent-cli-toolkit/core": "workspace:*",
+    "tencentcloud-sdk-nodejs-tokenhub": "^4.1.315",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

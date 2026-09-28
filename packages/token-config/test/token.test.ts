@@ -228,6 +228,102 @@ describe("runTokenAdd", () => {
     }
   });
 
+  it("writes tencent productType default personal", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      await runTokenAdd([
+        "--name",
+        "tx",
+        "--platform",
+        "tencent",
+        "--token",
+        "t",
+        "--base-url",
+        "https://example.test/v1",
+      ]);
+      const saved = loadProfiles().profiles.tx;
+      assert.equal(saved!.platform, "tencent");
+      assert.equal(saved!.productType, "personal");
+    } finally {
+      restore();
+    }
+  });
+
+  it("writes tencent productType from --product-type", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      await runTokenAdd([
+        "--name",
+        "tx",
+        "--platform",
+        "tencent",
+        "--token",
+        "t",
+        "--base-url",
+        "https://example.test/v1",
+        "--product-type",
+        "enterprise-auto",
+      ]);
+      assert.equal(loadProfiles().profiles.tx!.productType, "enterprise-auto");
+    } finally {
+      restore();
+    }
+  });
+
+  it("rejects invalid tencent productType without saving", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      await assert.rejects(
+        runTokenAdd([
+          "--name",
+          "tx",
+          "--platform",
+          "tencent",
+          "--token",
+          "t",
+          "--base-url",
+          "https://example.test/v1",
+          "--product-type",
+          "basic",
+        ]),
+        /无效的套餐类型: basic/,
+      );
+      assert.equal(loadProfiles().profiles.tx, undefined);
+    } finally {
+      restore();
+    }
+  });
+
+  it("rejects --product-type for non-tencent platforms", async () => {
+    const restore = mockHttpFetch(() =>
+      jsonResponse({ data: [{ id: "m1", name: "M1" }] }),
+    );
+    try {
+      await assert.rejects(
+        runTokenAdd([
+          "--name",
+          "p",
+          "--platform",
+          "deepseek",
+          "--token",
+          "t",
+          "--product-type",
+          "enterprise",
+        ]),
+        /仅 tencent 平台支持 --product-type/,
+      );
+      assert.equal(loadProfiles().profiles.p, undefined);
+    } finally {
+      restore();
+    }
+  });
+
   it("fails without saving when the models fetch fails", async () => {
     const restore = mockHttpFetch(() => statusResponse(401));
     try {

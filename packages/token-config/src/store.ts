@@ -71,6 +71,11 @@ function parseProfile(name: string, value: unknown): TokenProfile {
     profile.claudeBaseUrl = claudeBaseUrl;
   }
 
+  const productType = value.productType;
+  if (typeof productType === "string" && productType.trim() !== "") {
+    profile.productType = productType.trim();
+  }
+
   return profile;
 }
 
@@ -141,6 +146,7 @@ export async function addProfile(input: {
   token: string;
   baseUrl: string;
   claudeBaseUrl?: string;
+  productType?: string;
 }): Promise<TokenProfile> {
   const file = loadProfiles();
   if (file.profiles[input.name] !== undefined) {
@@ -164,6 +170,9 @@ export async function addProfile(input: {
   };
   if (input.claudeBaseUrl !== undefined) {
     profile.claudeBaseUrl = input.claudeBaseUrl;
+  }
+  if (input.productType !== undefined) {
+    profile.productType = input.productType;
   }
 
   latest.profiles[input.name] = profile;

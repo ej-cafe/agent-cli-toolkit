@@ -46,7 +46,7 @@ token profile（含各自的模型列表）保存在该目录下的 `token-profi
 ## 命令总览
 
 ```bash
-agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>] [--product-type <productType>]
 agent-cli token delete <name>
 agent-cli token list
 agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
@@ -84,6 +84,7 @@ agent-cli token add \
 | `--token` | 是 | API token（可能进入 shell 历史，请谨慎） |
 | `--base-url` | 视平台 | OpenAI 兼容 API 根地址 |
 | `--claude-base-url` | 否 | Anthropic 兼容 API 根地址 |
+| `--product-type` | 否（仅 tencent；默认 `personal`） | 腾讯云 TokenHub 套餐类型：`personal` 个人版（暂不支持 usage 查询）、`enterprise` 企业版专业套餐、`enterprise-auto` 企业版轻享套餐 |
 
 非交互环境（stdin 非 TTY）下，缺失必填项会直接报错，不会进入问答。
 
@@ -96,14 +97,16 @@ agent-cli token add \
 | `kimi` | 可省略，默认 `https://api.moonshot.cn/v1`（中国站） | 可省略，默认 `https://api.moonshot.cn/anthropic` |
 | `glm` | 可省略，默认 `https://open.bigmodel.cn/api/coding/paas/v4`（中国站 Coding Plan） | 可省略，默认 `https://open.bigmodel.cn/api/anthropic` |
 
-显式传入的 URL 会覆盖预设。Kimi 国际站可将 URL 覆盖为 `api.moonshot.ai` 对应地址。
+显式传入的 URL 会覆盖预设。Kimi 国际站可将 URL 覆盖为 `api.moonshot.ai` 对应地址。GLM 通用按量可用 `https://open.bigmodel.cn/api/paas/v4`，国际站可用 `api.z.ai` 对应地址。
 
-交互模式下，`deepseek` / `kimi` / `glm` 的 base-url 与 claude-base-url 可直接回车使用预设；`aliyun` / `tencent` 必须填写 base-url。`glm` 国际站或通用按量端点可用显式 URL 覆盖。
+交互模式下，`deepseek` / `kimi` / `glm` 的 base-url 与 claude-base-url 可直接回车使用预设；`aliyun` / `tencent` 必须填写 base-url。tencent 还会询问套餐类型（默认 personal 个人版）。
 
 ### 示例
 
 ```bash
 agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+agent-cli token add --name zg --platform glm --token sk-xxx
 
 agent-cli token add \
   --name bailian \
@@ -168,10 +171,12 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 | 标志 | 说明 |
 |------|------|
 | `--all` | 同步到全部已对接工具 |
-| `--tool` | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi` |
+| `--tool` | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi`。`dsh` 的显示名是 DeepSeek Harness（dsh） |
 | `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中） |
 
 未指定 `--all` 或 `--tool` 时，会在交互终端选择目标工具（编号或 id，逗号/空格分隔）。`--model` 仅对 `claude-code`、`dsh`、`pi` 有效；若目标只有 `opencode` 并传了 `--model`，会报错。
+
+配置目录或对应程序不存在的工具会被**跳过**（不创建该配置目录），并向 stderr 说明缺失项；stdout 只列出实际写入的工具。全部候选都被跳过时以退出码 0 结束。
 
 ### 各工具写入位置与行为
 
@@ -232,7 +237,7 @@ agent-cli token sync-model-list --platform glm
 
 ## `token usage`
 
-按已保存 profile 查询套餐余量或账户余额，并分段展示（成功段之间以空行分隔）。
+按已保存 profile 查询套餐余量或账户余额，并分段展示（各 profile 的输出之间以空行分隔，成功与失败均如此）。
 
 ### 用法
 
@@ -254,10 +259,10 @@ agent-cli token usage [--name <profile>] [--output table|text|raw]
 | `deepseek` | `GET {baseUrl}/user/balance` | 使用 profile 中的 API token |
 | `kimi` | `GET {baseUrl}/users/me/balance` | 使用 profile 中的 API token |
 | `aliyun` | 本机 `bl usage token-plan --output json` | 需已安装 bailian-cli（`bl` 在 PATH 中），并先执行 `bl auth login --console`；**不读** profile 里的 API Key |
-| `tencent` | — | 暂不支持 API 余额查询，请前往控制台：https://console.cloud.tencent.com/tokenhub |
+| `tencent` | 腾讯云 TokenHub OpenAPI（`DescribeTokenPlanList`） | 使用环境变量 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` 查询该账户的 TokenPlan 套餐余量；region 用 `TENCENTCLOUD_REGION` 覆盖、默认 `ap-guangzhou`。凭据缺失时不发请求，提示设置或前往控制台：https://console.cloud.tencent.com/tokenhub。**不读** profile 里的 token。profile 的 `productType` 需为 `enterprise`（企业版专业套餐）或 `enterprise-auto`（企业版轻享套餐）；`add` 缺省写入 `personal`（个人版），个人版暂不支持查询 |
 | `glm` | — | 暂不支持 API 余额查询，请前往控制台：https://bigmodel.cn/coding-plan/personal/usage |
 
-多个 aliyun profile 只会实际调用一次 `bl`。某个 profile 失败时，错误写到 stderr，其它 profile 仍会继续；若全部失败则退出码为 1。
+多个 aliyun profile 只会实际调用一次 `bl`；多个 tencent profile 只会触发一次 TokenHub 查询（复用同一份结果）。某个 profile 失败时，错误写到 stderr，其它 profile 仍会继续；若全部失败则退出码为 1。
 
 ### 示例
 
@@ -294,4 +299,4 @@ agent-cli token usage --name ds
 3. 提交代码
 4. 新建 Pull Request
 
-远程仓库：Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`，默认分支 `master`。
+远程仓库：主库 GitHub `git@github.com:ej-cafe/agent-cli-toolkit.git`（`origin`），备库 Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`（`gitee`）。默认分支 `master`。

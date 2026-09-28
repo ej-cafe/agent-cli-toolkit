@@ -5,7 +5,7 @@ export function printHelp(): void {
 
 Usage:
   agent-cli [--help] [--version]
-  agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+  agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>] [--product-type <productType>]
   agent-cli token delete <name>
   agent-cli token list
   agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
@@ -32,7 +32,8 @@ Flags:
 DeepSeek 预设 base-url 为 https://api.deepseek.com，claude-base-url 为 https://api.deepseek.com/anthropic；显式传入则覆盖。
 Kimi 中国站预设 base-url 为 https://api.moonshot.cn/v1，claude-base-url 为 https://api.moonshot.cn/anthropic；显式传入则覆盖（国际站可用 api.moonshot.ai）。
 GLM 中国站 Coding Plan 预设 base-url 为 https://open.bigmodel.cn/api/coding/paas/v4，claude-base-url 为 https://open.bigmodel.cn/api/anthropic；显式传入则覆盖（通用按量可用 …/api/paas/v4；国际站可用 api.z.ai）。
+仅 tencent 可指定 --product-type，缺省 personal（个人版，token usage 暂不支持个人版查询），可设 enterprise（企业版专业套餐）或 enterprise-auto（企业版轻享套餐）。
 同步模型列表时每个目标 profile 都请求自己的 {baseUrl}/models，没有平台级共享目录。
-token usage：按已保存 profile 分段查询并展示，成功段之间空行分隔；省略 --name 时查询全部 profile。--output 可取 table（默认命令行表格）、text（文本摘要）、raw（原始 JSON）。deepseek 为 GET {baseUrl}/user/balance，kimi 为 GET {baseUrl}/users/me/balance；aliyun 用本机 bl 查询百炼 Token Plan（需 bl auth login --console，不读 profile API Key）；腾讯云与智谱 GLM 暂不支持 API 余额查询，请前往控制台。
+token usage：按已保存 profile 分段查询并展示，各 profile 输出之间以空行分隔（成功段与失败段均如此）；省略 --name 时查询全部 profile。--output 可取 table（默认命令行表格）、text（文本摘要）、raw（原始 JSON）。deepseek 为 GET {baseUrl}/user/balance，kimi 为 GET {baseUrl}/users/me/balance；aliyun 用本机 bl 查询百炼 Token Plan（需 bl auth login --console，不读 profile API Key）；腾讯云调用 TokenHub OpenAPI（DescribeTokenPlanList）查询套餐余量，需设置环境变量 TENCENTCLOUD_SECRET_ID 与 TENCENTCLOUD_SECRET_KEY，region 可用 TENCENTCLOUD_REGION 覆盖、默认 ap-guangzhou，凭据缺失时提示设置或前往控制台；profile 需声明 productType（enterprise 企业版专业套餐 / enterprise-auto 企业版轻享套餐），个人版暂不支持查询；智谱 GLM 暂不支持 API 余额查询，请前往控制台。
 `);
 }

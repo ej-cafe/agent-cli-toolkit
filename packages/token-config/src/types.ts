@@ -31,6 +31,8 @@ export type TokenProfile = {
   token: string;
   baseUrl: string;
   claudeBaseUrl?: string;
+  /** 套餐类型（tencent：enterprise 企业版专业套餐 / enterprise-auto 企业版轻享套餐）。 */
+  productType?: string;
   models: TokenProfileModel[];
 };
 
