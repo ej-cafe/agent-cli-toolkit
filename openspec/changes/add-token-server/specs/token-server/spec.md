@@ -49,7 +49,7 @@
 
 系统必须按路径路由：以 `/anthropic` 开头（`/anthropic` 本身或 `/anthropic/...`）的请求转发到激活 profile 的 `claudeBaseUrl`，当 `claudeBaseUrl` 缺失或为空时回退到 `baseUrl`，转发路径为去掉 `/anthropic` 前缀后的剩余路径（剩余为空时按 `/` 处理）；其余请求转发到激活 profile 的 `baseUrl`，路径原样保留。查询串必须原样转发。
 
-系统必须在转发前校验入站鉴权：已配置 API key（由 `gen-api-key` 生成，见「API key 生成与请求鉴权」）时，入站 `Authorization` 头必须恰好等于 `Bearer <key>`，否则以 401 响应且不得发起上游请求；未配置任何 key 时，所有请求都必须以 401 拒绝。校验通过后，系统必须移除入站请求的 `authorization`、`x-api-key`、`host` 以及逐跳头（如 `connection`、`keep-alive`、`transfer-encoding`、`upgrade`），并设置 `Authorization: Bearer <激活 profile 的 token>`；对 `/anthropic` 路由还必须同时设置 `x-api-key: <激活 profile 的 token>`。请求方法、查询串与请求体必须原样转发，不得改写请求体，且不得把入站的服务器 key 透传给上游。
+系统必须在转发前校验入站鉴权：已配置 API key（由 `gen-api-key` 生成，见「API key 生成与请求鉴权」）时，入站 `Authorization` 头必须恰好等于 `Bearer <key>`，或入站 `x-api-key` 头必须恰好等于 `<key>`（分别对应 OpenAI 风格与 Anthropic 风格客户端），否则以 401 响应且不得发起上游请求；未配置任何 key 时，所有请求都必须以 401 拒绝。校验通过后，系统必须移除入站请求的 `authorization`、`x-api-key`、`host` 以及逐跳头（如 `connection`、`keep-alive`、`transfer-encoding`、`upgrade`），并设置 `Authorization: Bearer <激活 profile 的 token>`；对 `/anthropic` 路由还必须同时设置 `x-api-key: <激活 profile 的 token>`。请求方法、查询串与请求体必须原样转发，不得改写请求体，且不得把入站的服务器 key 透传给上游。
 
 系统必须透传上游响应的状态码与响应体，包括 `text/event-stream` 流式响应，且必须边收边发，不得缓冲到响应结束再发送。
 
@@ -92,7 +92,7 @@
 
 #### Scenario: 未携带或携带错误的 key 返回 401
 
-- **WHEN** 客户端未携带 `Authorization` 头，或携带的 `Bearer <key>` 与已配置 key 不匹配，或服务器尚未生成 key
+- **WHEN** 客户端未携带 `Authorization` 头或 `x-api-key` 头、携带的 `Bearer <key>` 或 `x-api-key` 与已配置 key 不匹配，或服务器尚未生成 key
 - **THEN** 系统以 401 响应且不发起上游请求，响应体与日志不泄露 key
 
 #### Scenario: 上游失败返回 502
@@ -139,7 +139,7 @@
 
 系统必须提供 `token-server gen-api-key`：用安全随机源生成前缀为 `tsk_` 的 key，原子写入配置目录下 `token-server.key`（文件权限 0600），并在生成时把 key 打印到 stdout（仅本次生成打印一次），随后以退出码 0 结束。重复执行 `gen-api-key` 必须视为轮换：新 key 覆盖旧 key 并立即生效，stderr 提示旧 key 已失效。`gen-api-key` 不得接受多余的位置参数，多余参数时报错并以非零退出码结束。
 
-运行中的服务器必须在每次请求时重新读取 `token-server.key` 并校验入站 `Authorization: Bearer <key>`（缺失或不匹配 → 401 且不发起上游请求，见「本地转发服务器」），使轮换后的下一个请求立即生效；key 不得出现在日志、错误响应或帮助文本中。
+运行中的服务器必须在每次请求时重新读取 `token-server.key` 并校验入站 `Authorization: Bearer <key>` 或 `x-api-key: <key>`（缺失或不匹配 → 401 且不发起上游请求，见「本地转发服务器」），使轮换后的下一个请求立即生效；key 不得出现在日志、错误响应或帮助文本中。
 
 `token-server start`、`start --foreground` 与 `token-server use` 在尚未生成 API key 时必须以非零退出码报错，提示先执行 `agent-cli token-server gen-api-key`，且不得启动服务器或改写任何工具配置。
 
@@ -245,7 +245,7 @@
 
 ### Requirement: 帮助信息列出 token-server 命令
 
-`agent-cli --help` 必须说明 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use` 与 `token-server gen-api-key`，并说明服务器仅监听本机、默认端口 `8787`（`--port` 可覆盖）、`--foreground`、服务器使用 `switch` / `use` 选定的激活 profile，以及首次使用前必须 `gen-api-key` 且服务器校验 `Authorization: Bearer <key>`。
+`agent-cli --help` 必须说明 `token-server start`、`token-server stop`、`token-server switch <profile>`、`token-server use` 与 `token-server gen-api-key`，并说明服务器仅监听本机、默认端口 `8787`（`--port` 可覆盖）、`--foreground`、服务器使用 `switch` 选定的激活 profile，以及首次使用前必须 `gen-api-key` 且服务器校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`。
 
 #### Scenario: 帮助列出 token-server 命令
 
@@ -265,4 +265,4 @@
 #### Scenario: 帮助说明 API key 鉴权
 
 - **WHEN** 用户执行 `agent-cli --help`
-- **THEN** 输出说明首次使用前必须执行 `gen-api-key`，服务器对每个请求校验 `Authorization: Bearer <key>`
+- **THEN** 输出说明首次使用前必须执行 `gen-api-key`，服务器对每个请求校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`

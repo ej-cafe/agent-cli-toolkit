@@ -320,6 +320,52 @@ describe("token-server forwarding", () => {
     assert.equal(res.status, 401);
     assert.equal(called, 0);
     assert.equal(res.body.includes(testApiKey), false);
+
+    // 请求携带错误的 x-api-key（Anthropic 风格头）。
+    res = await clientRequest(keyedPort, {
+      path: "/v1/models",
+      headers: { "x-api-key": "wrong-key" },
+    });
+    assert.equal(res.status, 401);
+    assert.equal(called, 0);
+  });
+
+  it("accepts x-api-key auth as the Anthropic-style equivalent of Authorization: Bearer", async () => {
+    const seen: SeenRequest[] = [];
+    const port = await start({
+      resolveProfile: () => profile(),
+      fetchImpl: recordingFetch(seen),
+    });
+
+    // x-api-key 与 key 匹配：通过鉴权并转发，且不入注入真实凭据时带 client-owned 头。
+    let res = await clientRequest(port, {
+      path: "/anthropic/v1/messages",
+      headers: { "x-api-key": testApiKey },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0]?.headers["authorization"], "Bearer secret-token");
+    assert.equal(seen[0]?.headers["x-api-key"], "secret-token");
+
+    // x-api-key 已鉴权通过时，authorization 缺失也放行；反之亦然。
+    res = await clientRequest(port, {
+      path: "/v1/models",
+      headers: { "x-api-key": testApiKey },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(seen.length, 2);
+    assert.equal(seen[1]?.headers["authorization"], "Bearer secret-token");
+
+    // 两个头都不带或都错误：401。
+    res = await clientRequest(port, { path: "/v1/models" });
+    assert.equal(res.status, 401);
+    assert.equal(seen.length, 2);
+    res = await clientRequest(port, {
+      path: "/v1/models",
+      headers: { "x-api-key": testApiKey, authorization: "Bearer wrong-key" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(seen.length, 3);
   });
 
   it("re-reads the api key on every request so rotation takes effect", async () => {

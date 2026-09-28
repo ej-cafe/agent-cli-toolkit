@@ -61,3 +61,4 @@
 - [x] 9.2 仓库根 `pnpm typecheck` 与 `pnpm test` 全量通过（含新增 key / use / 生命周期用例）
 - [x] 9.3 项目内冒烟（可选，需真实 profile）：`gen-api-key` → `start` → 无 key 请求 401 → 带 key 请求转发 → `use --all` 写配置 → 轮换后旧 key 401；无合适凭据时记录为待验收项
 - [x] 9.4 use 语义收敛：`use` 不再接收 `<profile>` 参数、不再写激活值，改为基于 `switch` 确定的激活 profile；同步 `spec.md`（use 需求/场景、激活 profile 需求、帮助信息）、`proposal.md`、`help.ts` 与 README 中/英、`use.test.ts`（8 条）、`help.test.ts`；验证：`use.test.ts` / `help.test.ts` / `pnpm test` 全量通过，`openspec validate add-token-server` 通过
+- [x] 9.5 x-api-key 鉴权适配：服务器鉴权门同时接受 `Authorization: Bearer <key>` 与 `x-api-key: <key>`（Anthropic 风格客户端 Claude Code / OpenCode 发后者）；`server.test.ts` 新增 x-api-key 正确/缺失/错误/混合用例；同步 `help.ts`、README 中/英、`spec.md`（鉴权需求、401 场景、API key 需求、帮助信息）与 `design.md`（鉴权门、决策 9、风险）；验证：`pnpm typecheck` 与 `pnpm test` 全量通过，`openspec validate add-token-server` 通过

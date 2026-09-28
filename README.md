@@ -284,7 +284,7 @@ agent-cli token usage --name kimi-cn --output raw
 
 ## `token-server`
 
-本机常驻的凭据注入转发服务器。客户端只需把 baseUrl 指向本机端口，服务器会用 `switch` / `use` 选定的激活 profile 注入凭据并转发到上游；运行中 `switch` 下一个请求即生效，无需改客户端配置或重启客户端。首次使用前必须先执行 `gen-api-key` 生成服务器 API key（写入 `token-server.key`）；服务器对每个请求校验 `Authorization: Bearer <key>`，未生成或 key 不匹配时返回 401，绝不转发凭据到上游。
+本机常驻的凭据注入转发服务器。客户端只需把 baseUrl 指向本机端口，服务器会用 `switch` / `use` 选定的激活 profile 注入凭据并转发到上游；运行中 `switch` 下一个请求即生效，无需改客户端配置或重启客户端。首次使用前必须先执行 `gen-api-key` 生成服务器 API key（写入 `token-server.key`）；服务器对每个请求校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，未生成或 key 不匹配时返回 401，绝不转发凭据到上游。
 
 ### 用法
 
@@ -310,7 +310,7 @@ agent-cli token-server stop                    # 终止并清理 pidfile
 
 ### 安全边界
 
-- 仅监听本机回环地址 `127.0.0.1`，不接受远程连接；请求必须携带 `Authorization: Bearer <key>`，key 由 `token-server gen-api-key` 生成（重复执行会轮换，旧 key 立即失效）。
+- 仅监听本机回环地址 `127.0.0.1`，不接受远程连接；请求必须携带 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，key 由 `token-server gen-api-key` 生成（重复执行会轮换，旧 key 立即失效）。
 - 未执行 `gen-api-key` 时 `start` / `use` 会直接报错，服务器也不会放行任何请求。
 - 不要在不可信的本机环境下运行；日志、错误响应与帮助文本不包含 token 或 key。
 

@@ -56,7 +56,7 @@
 
 转发前的请求上应用两层处理：
 
-1. **鉴权门**（见决策 9）：读取 `token-server.key`（无文件视为未配置），入站 `Authorization` 必须恰好等于 `Bearer <key>`，否则 401 且不发起上游请求；key 不进入后续任何处理。
+1. **鉴权门**（见决策 9）：读取 `token-server.key`（无文件视为未配置），入站 `Authorization` 必须恰好等于 `Bearer <key>`，或入站 `x-api-key` 恰好等于 `<key>`（OpenAI 风格与 Anthropic 风格客户端各发其一），否则 401 且不发起上游请求；key 不进入后续任何处理。
 2. **凭据替换**：删除入站 `authorization`、`x-api-key`、`host`，以及逐跳头 `connection`、`keep-alive`、`proxy-*`、`transfer-encoding`、`upgrade`、`te`、`trailer`。始终设置 `Authorization: Bearer <token>`；`/anthropic` 路由额外设置 `x-api-key: <token>`。请求方法、查询串、请求体不改。
 
 响应侧：透传状态码与响应头（剔除逐跳头），由 Node 负责分帧。
@@ -108,7 +108,7 @@
 ### 9. 服务器 API key 鉴权
 
 - `token-server gen-api-key` 用 `crypto.randomBytes(32)` 生成 key（前缀 `tsk_` + base64url），原子写入 `<configDir>/token-server.key`（0600），stdout 仅打印一次；重复执行 = 轮换（旧 key 立即失效，stderr 提示）。
-- 服务器每次请求重读 `token-server.key`（与激活 profile 同频），校验入站 `authorization === "Bearer " + key`，否则 401（不发起上游）。未配置 key 时全部 401。
+- 服务器每次请求重读 `token-server.key`（与激活 profile 同频），校验入站 `authorization === "Bearer " + key` 或 `x-api-key === key`，否则 401（不发起上游）。未配置 key 时全部 401。
 - `start` / `start --foreground` / `use` 前置校验 key 存在，否则报错退出 1 并提示 `gen-api-key`，避免「启动即全 401」的困惑。
 
 **理由：** 客户端（Claude Code / pi 等）会把 key 当 apiKey 写入本地配置且 HTTP 有别的进程可在本机访问，纯回环绑定不足以区分「谁在调用」；单 key + 每次请求重读让轮换即时生效，与激活 profile 的机制同构，不引入控制面。
@@ -134,7 +134,7 @@ pi 的 `defaultModel` 取 `--model ?? profile.models[0]?.id`（空模型列表�
 ## Risks / Trade-offs
 
 - **守护进程 `spawn` 依赖 `process.argv[1]` 与 `process.execArgv`** → 在 `tsx`/`pnpm dev` 下需带上 `execArgv` 才能加载 TS；已在 spawn 时 `[...process.execArgv, process.argv[1], ...]`。若某些包装场景 `argv[1]` 不是入口，`start` 报错并提示查看日志；`--foreground` 是可靠退路。
-- **本机单 key 鉴权** → 仅绑定 `127.0.0.1` + 每次请求校验 `Authorization: Bearer <key>`；key 由 `gen-api-key` 生成并轮换，日志/错误/帮助不含 key。若需更强隔离（TLS / 绑定 Unix socket / 多用户 key）可后续变更。
+- **本机单 key 鉴权** → 仅绑定 `127.0.0.1` + 每次请求校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`；key 由 `gen-api-key` 生成并轮换，日志/错误/帮助不含 key。若需更强隔离（TLS / 绑定 Unix socket / 多用户 key）可后续变更。
 - **每请求重读磁盘 JSON** → 低频、文件小，开销可接受；换取切换即时生效与实现简单。若将来成为热点可加 mtime 缓存。
 - **`fetch` + `duplex: "half"` 的 Node 版本要求** → `engines.node >= 20` 已满足；设计里固定该用法，避免回退到全缓冲。
 - **pidfile 残留/pid 复用** → `stop` 与 `start` 都以 `kill(pid, 0)` 校验存活；不存活即清理并按「未运行」处理；记录端口便于人工核对。

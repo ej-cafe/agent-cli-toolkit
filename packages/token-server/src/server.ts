@@ -121,11 +121,15 @@ async function handleRequest(
   const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
   const method = req.method ?? "GET";
 
-  // 鉴权门：入站请求必须携带与已配置 key 匹配的 Authorization: Bearer <key>。
+  // 鉴权门：入站请求必须携带与已配置 key 匹配的凭据。
+  // OpenAI 风格客户端发 `Authorization: Bearer <key>`，Anthropic 风格客户端（Claude Code / OpenCode）发 `x-api-key: <key>`。
   const configuredKey = options.resolveApiKey();
   const gotAuth = req.headers.authorization?.trim();
+  const rawApiKey = req.headers["x-api-key"];
+  const gotApiKey = (Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey)?.trim();
   const validAuth =
-    configuredKey !== undefined && gotAuth === `Bearer ${configuredKey}`;
+    configuredKey !== undefined &&
+    (gotAuth === `Bearer ${configuredKey}` || gotApiKey === configuredKey);
   if (!validAuth) {
     log(`${method} ${requestUrl.pathname} -> 401`);
     res.writeHead(401, { "content-type": "application/json" });
