@@ -46,11 +46,11 @@ Token profiles (including each profile’s model list) are stored in `token-prof
 ## Command overview
 
 ```bash
-agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi>] [--token <token>] [--base-url <url>] [--claude-base-url <url>]
+agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>] [--product-type <productType>]
 agent-cli token delete <name>
 agent-cli token list
 agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
-agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 agent-cli token usage [--name <profile>] [--output table|text|raw]
 ```
 
@@ -69,10 +69,11 @@ agent-cli token add
 # Pass all arguments at once
 agent-cli token add \
   --name <name> \
-  --platform <aliyun|tencent|deepseek|kimi> \
+  --platform <aliyun|tencent|deepseek|kimi|glm> \
   --token <token> \
   [--base-url <url>] \
-  [--claude-base-url <url>]
+  [--claude-base-url <url>] \
+  [--product-type <personal|enterprise|enterprise-auto>]
 ```
 
 ### Flags
@@ -80,10 +81,11 @@ agent-cli token add \
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--name` | Yes | Profile name (local unique key) |
-| `--platform` | Yes | `aliyun`, `tencent`, `deepseek`, or `kimi` |
+| `--platform` | Yes | `aliyun`, `tencent`, `deepseek`, `kimi`, or `glm` |
 | `--token` | Yes | API token (may appear in shell history; use with care) |
 | `--base-url` | Platform-dependent | OpenAI-compatible API root URL |
 | `--claude-base-url` | No | Anthropic-compatible API root URL |
+| `--product-type` | No (tencent only; default `personal`) | Tencent Cloud TokenHub plan type: `personal` (personal plan, no usage query support), `enterprise` (enterprise pro plan), `enterprise-auto` (enterprise light plan) |
 
 In non-interactive environments (stdin is not a TTY), missing required fields cause an immediate error; no prompts are shown.
 
@@ -94,15 +96,18 @@ In non-interactive environments (stdin is not a TTY), missing required fields ca
 | `aliyun` / `tencent` | **Required** | Optional |
 | `deepseek` | Optional; default `https://api.deepseek.com` | Optional; default `https://api.deepseek.com/anthropic` |
 | `kimi` | Optional; default `https://api.moonshot.cn/v1` (China endpoint) | Optional; default `https://api.moonshot.cn/anthropic` |
+| `glm` | Optional; default `https://open.bigmodel.cn/api/coding/paas/v4` (China Coding Plan) | Optional; default `https://open.bigmodel.cn/api/anthropic` |
 
-Explicit URLs override the presets. For Kimi’s international endpoint, override with the corresponding `api.moonshot.ai` URLs.
+Explicit URLs override the presets. For Kimi’s international endpoint, override with the corresponding `api.moonshot.ai` URLs. For GLM pay-as-you-go use `https://open.bigmodel.cn/api/paas/v4`; for the international endpoint use the corresponding `api.z.ai` URLs.
 
-In interactive mode, you can press Enter to accept presets for `deepseek` / `kimi` base-url and claude-base-url; `aliyun` / `tencent` always require a base-url.
+In interactive mode, you can press Enter to accept presets for `deepseek` / `kimi` / `glm` base-url and claude-base-url; `aliyun` / `tencent` always require a base-url. For `tencent`, you are also asked for the plan type (default `personal`).
 
 ### Examples
 
 ```bash
 agent-cli token add --name ds --platform deepseek --token sk-xxx
+
+agent-cli token add --name zg --platform glm --token sk-xxx
 
 agent-cli token add \
   --name bailian \
@@ -167,10 +172,12 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 | Flag | Description |
 |------|-------------|
 | `--all` | Sync to all integrated tools |
-| `--tool` | Target tool; repeatable: `claude-code`, `opencode`, `dsh`, `pi` |
+| `--tool` | Target tool; repeatable: `claude-code`, `opencode`, `dsh`, `pi`. The display name for `dsh` is DeepSeek Harness (dsh) |
 | `--model` | Default model id (must exist in that profile’s model list) |
 
 If neither `--all` nor `--tool` is given, the CLI prompts for target tools (numbers or ids, comma/space separated). `--model` applies only to `claude-code`, `dsh`, and `pi`; passing `--model` when the only target is `opencode` is an error.
+
+Tools whose config directory or matching program is missing are **skipped** (the config directory is not created), with a stderr note about what is missing. stdout lists only tools that were actually written. If every candidate is skipped, the command exits 0.
 
 ### Tool destinations and behavior
 
@@ -207,7 +214,7 @@ Re-request `{baseUrl}/models` for each target profile and update the local model
 ### Usage
 
 ```bash
-agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi>]
+agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 ```
 
 | Flag | Description |
@@ -224,13 +231,14 @@ agent-cli token sync-model-list
 agent-cli token sync-model-list --name ds
 agent-cli token sync-model-list --platform aliyun
 agent-cli token sync-model-list --platform kimi
+agent-cli token sync-model-list --platform glm
 ```
 
 ---
 
 ## `token usage`
 
-Query plan quota or account balance for saved profiles, printed in sections (blank line between successful sections).
+Query plan quota or account balance for saved profiles, printed per profile; each profile's output is separated by a blank line (success and failure alike).
 
 ### Usage
 
@@ -252,9 +260,10 @@ agent-cli token usage [--name <profile>] [--output table|text|raw]
 | `deepseek` | `GET {baseUrl}/user/balance` | Uses the profile API token |
 | `kimi` | `GET {baseUrl}/users/me/balance` | Uses the profile API token |
 | `aliyun` | Local `bl usage token-plan --output json` | Requires bailian-cli (`bl` on PATH) and `bl auth login --console` first; does **not** read the profile API key |
-| `tencent` | — | Not supported yet |
+| `tencent` | Tencent Cloud TokenHub OpenAPI (`DescribeTokenPlanList`) | Uses environment variables `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` to query the account's TokenPlan quota; region can be overridden with `TENCENTCLOUD_REGION`, default `ap-guangzhou`. No request is made when credentials are missing; a hint points to the console: https://console.cloud.tencent.com/tokenhub. Does **not** read the profile token. The profile's `productType` must be `enterprise` (enterprise pro plan) or `enterprise-auto` (enterprise light plan); `add` writes `personal` by default (personal plan does not support usage queries) |
+| `glm` | — | API balance query not supported; open the console: https://bigmodel.cn/coding-plan/personal/usage |
 
-Multiple aliyun profiles trigger only one `bl` call. If one profile fails, the error goes to stderr and others continue; if all fail, the exit code is 1.
+Multiple aliyun profiles trigger only one `bl` call; multiple tencent profiles trigger only one TokenHub query (the result is reused). If one profile fails, the error goes to stderr and others continue; if all fail, the exit code is 1.
 
 ### Examples
 
@@ -291,4 +300,4 @@ agent-cli token usage --name ds
 3. Commit your changes
 4. Open a Pull Request
 
-Remote: Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git`, default branch `master`.
+Remotes: primary GitHub `git@github.com:ej-cafe/agent-cli-toolkit.git` (`origin`), backup Gitee `git@gitee.com:galaxy-explorer/agent-cli-toolkit.git` (`gitee`). Default branch `master`.
