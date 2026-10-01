@@ -1,8 +1,10 @@
+# token-server Specification
+
 ## Purpose
 
 提供一个本机常驻的凭据注入转发服务器，让 AI 客户端把 baseUrl 指向本地端口即可使用当前激活 token profile，并通过 `token-server switch` 在运行中切换 profile，而无需改写客户端配置或重启客户端。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 提供 token-server 命令
 
@@ -47,7 +49,7 @@
 
 系统必须提供仅监听本机回环地址 `127.0.0.1` 的 HTTP 转发服务器，默认端口 `8787`，可用 `start --port <port>` 覆盖。
 
-系统必须按路径路由：以 `/anthropic` 开头（`/anthropic` 本身或 `/anthropic/...`）的请求转发到激活 profile 的 `claudeBaseUrl`，当 `claudeBaseUrl` 缺失或为空时回退到 `baseUrl`，转发路径为去掉 `/anthropic` 前缀后的剩余路径（剩余为空时按 `/` 处理）；其余请求转发到激活 profile 的 `baseUrl`，路径原样保留。查询串必须原样转发。
+系统必须按路径路由：以 `/anthropic` 开头（`/anthropic` 本身或 `/anthropic/...`，本地挂载前缀）的请求转发到激活 profile 的 `claudeBaseUrl`，当 `claudeBaseUrl` 缺失或为空时回退到 `baseUrl`，转发路径为去掉 `/anthropic` 前缀后的剩余路径（剩余为空时按 `/` 处理）；其余请求转发到激活 profile 的 `baseUrl`，转发路径为去掉本地 OpenAI 挂载前缀 `/v1` 后的剩余路径（路径以 `/v1` 开头时剥除，`baseUrl` 本身通常已含 `/v1` 或等价段，剥除后拼接避免重复；不以 `/v1` 开头时原样保留）。查询串必须原样转发。
 
 系统必须在转发前校验入站鉴权：已配置 API key（由 `gen-api-key` 生成，见「API key 生成与请求鉴权」）时，入站 `Authorization` 头必须恰好等于 `Bearer <key>`，或入站 `x-api-key` 头必须恰好等于 `<key>`（分别对应 OpenAI 风格与 Anthropic 风格客户端），否则以 401 响应且不得发起上游请求；未配置任何 key 时，所有请求都必须以 401 拒绝。校验通过后，系统必须移除入站请求的 `authorization`、`x-api-key`、`host` 以及逐跳头（如 `connection`、`keep-alive`、`transfer-encoding`、`upgrade`），并设置 `Authorization: Bearer <激活 profile 的 token>`；对 `/anthropic` 路由还必须同时设置 `x-api-key: <激活 profile 的 token>`。请求方法、查询串与请求体必须原样转发，不得改写请求体，且不得把入站的服务器 key 透传给上游。
 
@@ -63,7 +65,7 @@
 #### Scenario: OpenAI 兼容路径转发到 baseUrl
 
 - **WHEN** 客户端请求 `http://127.0.0.1:8787/v1/chat/completions?x=1`
-- **THEN** 系统把该请求转发到 `<激活 profile 的 baseUrl>/v1/chat/completions?x=1`
+- **THEN** 系统剥除本地挂载前缀 `/v1`，把该请求转发到 `<激活 profile 的 baseUrl>/chat/completions?x=1`（当 `baseUrl` 以 `/v1` 结尾时即 `<baseUrl>/v1/chat/completions?x=1`，不得拼成双 `/v1`）
 
 #### Scenario: Anthropic 兼容路径转发到 claudeBaseUrl
 
@@ -169,7 +171,7 @@
 
 工具选择必须与 `token use` 语义一致：`--all` 选择全部支持的四种工具；一个或多个 `--tool <id>` 选择指定工具（`claude-code` / `opencode` / `dsh` / `pi`）；两者都没有时以交互问答选择（编号或 id，逗号/空格分隔）。未知工具 id 或空选择必须报错。
 
-工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 写 `http://127.0.0.1:<端口>/anthropic`（服务器将其路由到 `claudeBaseUrl`），OpenCode、dsh 与 pi 写 `http://127.0.0.1:<端口>/v1`（路由到 `baseUrl`）；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
+工具的 `apiKey` / 凭据字段必须写为生成的服务器 key，`baseUrl` 必须写为本地服务器地址：Claude Code 写 `http://127.0.0.1:<端口>/anthropic`（服务器将其路由到 `claudeBaseUrl`），OpenCode、dsh 与 pi 写 `http://127.0.0.1:<端口>/v1`（路由到 `baseUrl`）；OpenCode 为 OpenAI 风格客户端，其 provider 以 OpenAI 兼容包 `@ai-sdk/openai` 写入（`npm` 字段）；端口取运行中 pidfile 的 `port`（存在时），否则默认 `8787`。
 
 `use` 的 `--model <id>` 必须与 `token use` 校验规则一致：id 必须属于激活 profile 的模型列表且仅对 Claude Code、dsh、pi 生效，否则报错。存在但不可用的工具（配置目录不存在、程序不在 `PATH`）必须跳过，不得创建其配置目录或改写其现有文件，并在 stderr 提示；全部工具都被跳过时仍以退出码 0 结束。
 

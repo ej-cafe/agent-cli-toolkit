@@ -6,7 +6,7 @@ TypeScript 命令行工具集，运行在 Node.js 上，使用 pnpm monorepo。�
 
 ## 要求
 
-- Node.js >= 20
+- Node.js &gt;= 20
 - pnpm 12（见根目录 `packageManager`）
 
 ## 安装与运行
@@ -29,10 +29,12 @@ pnpm --filter @agent-cli-toolkit/cli dev   # 用 tsx 跑源码
 
 全局标志：
 
-| 标志 | 说明 |
-|------|------|
-| `--help` | 打印帮助 |
+
+| 标志          | 说明   |
+| ----------- | ---- |
+| `--help`    | 打印帮助 |
 | `--version` | 打印版本 |
+
 
 ## 配置目录
 
@@ -84,25 +86,29 @@ agent-cli token add \
 
 ### 标志
 
-| 标志 | 必填 | 说明 |
-|------|------|------|
-| `--name` | 是 | profile 名称（本地唯一键） |
-| `--platform` | 是 | `aliyun`、`tencent`、`deepseek`、`kimi`、`glm` |
-| `--token` | 是 | API token（可能进入 shell 历史，请谨慎） |
-| `--base-url` | 视平台 | OpenAI 兼容 API 根地址 |
-| `--claude-base-url` | 否 | Anthropic 兼容 API 根地址 |
-| `--product-type` | 否（仅 tencent；默认 `personal`） | 腾讯云 TokenHub 套餐类型：`personal` 个人版（暂不支持 usage 查询）、`enterprise` 企业版专业套餐、`enterprise-auto` 企业版轻享套餐 |
+
+| 标志                  | 必填                         | 说明                                                                                             |
+| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `--name`            | 是                          | profile 名称（本地唯一键）                                                                              |
+| `--platform`        | 是                          | `aliyun`、`tencent`、`deepseek`、`kimi`、`glm`                                                     |
+| `--token`           | 是                          | API token（可能进入 shell 历史，请谨慎）                                                                   |
+| `--base-url`        | 视平台                        | OpenAI 兼容 API 根地址                                                                              |
+| `--claude-base-url` | 否                          | Anthropic 兼容 API 根地址                                                                           |
+| `--product-type`    | 否（仅 tencent；默认 `personal`） | 腾讯云 TokenHub 套餐类型：`personal` 个人版（暂不支持 usage 查询）、`enterprise` 企业版专业套餐、`enterprise-auto` 企业版轻享套餐 |
+
 
 非交互环境（stdin 非 TTY）下，缺失必填项会直接报错，不会进入问答。
 
 ### 平台与默认 URL
 
-| 平台 | `--base-url` | `--claude-base-url` |
-|------|--------------|---------------------|
-| `aliyun` / `tencent` | **必填** | 可选 |
-| `deepseek` | 可省略，默认 `https://api.deepseek.com` | 可省略，默认 `https://api.deepseek.com/anthropic` |
-| `kimi` | 可省略，默认 `https://api.moonshot.cn/v1`（中国站） | 可省略，默认 `https://api.moonshot.cn/anthropic` |
-| `glm` | 可省略，默认 `https://open.bigmodel.cn/api/coding/paas/v4`（中国站 Coding Plan） | 可省略，默认 `https://open.bigmodel.cn/api/anthropic` |
+
+| 平台                   | `--base-url`                                                          | `--claude-base-url`                             |
+| -------------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
+| `aliyun` / `tencent` | **必填**                                                                | 可选                                              |
+| `deepseek`           | 可省略，默认 `https://api.deepseek.com`                                     | 可省略，默认 `https://api.deepseek.com/anthropic`     |
+| `kimi`               | 可省略，默认 `https://api.moonshot.cn/v1`（中国站）                              | 可省略，默认 `https://api.moonshot.cn/anthropic`      |
+| `glm`                | 可省略，默认 `https://open.bigmodel.cn/api/coding/paas/v4`（中国站 Coding Plan） | 可省略，默认 `https://open.bigmodel.cn/api/anthropic` |
+
 
 显式传入的 URL 会覆盖预设。Kimi 国际站可将 URL 覆盖为 `api.moonshot.ai` 对应地址。GLM 通用按量可用 `https://open.bigmodel.cn/api/paas/v4`，国际站可用 `api.z.ai` 对应地址。
 
@@ -175,11 +181,13 @@ agent-cli token list
 agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 ```
 
-| 标志 | 说明 |
-|------|------|
-| `--all` | 同步到全部已对接工具 |
-| `--tool` | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi`。`dsh` 的显示名是 DeepSeek Harness（dsh） |
-| `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中） |
+
+| 标志        | 说明                                                                             |
+| --------- | ------------------------------------------------------------------------------ |
+| `--all`   | 同步到全部已对接工具                                                                     |
+| `--tool`  | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi`。`dsh` 的显示名是 DeepSeek Harness（dsh） |
+| `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中）                                                |
+
 
 未指定 `--all` 或 `--tool` 时，会在交互终端选择目标工具（编号或 id，逗号/空格分隔）。`--model` 仅对 `claude-code`、`dsh`、`pi` 有效；若目标只有 `opencode` 并传了 `--model`，会报错。
 
@@ -187,12 +195,14 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 
 ### 各工具写入位置与行为
 
-| `--tool` | 配置路径 | 行为摘要 |
-|----------|----------|----------|
-| `claude-code` | `~/.claude/settings.json` 的 `env` | 写入 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`；有 `--model` 时写入 `ANTHROPIC_MODEL` |
-| `opencode` | `~/.config/opencode/opencode.json`（或 `$XDG_CONFIG_HOME/opencode/opencode.json`） | 以 profile 名称为键写入 `provider`，含模型列表；`--model` 对其无效 |
-| `dsh` | `$DSH_HOME/settings.yaml`（默认 `$DSH_HOME` 为 `~/.dsh`），以及同目录 `.credentials.yaml` | 写入 `llm-pi-ai.providers.<name>`；有 `--model` 时写入顶层 `agent-default-model` |
-| `pi` | `$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`（默认 `~/.pi/agent`） | 总会设置 `defaultProvider`（profile 名）与 `defaultModel`：有 `--model` 用该 id，否则用模型列表第一项 |
+
+| `--tool`      | 配置路径                                                                                      | 行为摘要                                                                             |
+| ------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `claude-code` | `~/.claude/settings.json` 的 `env`                                                         | 写入 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`；有 `--model` 时写入 `ANTHROPIC_MODEL` |
+| `opencode`    | `~/.config/opencode/opencode.json`（或 `$XDG_CONFIG_HOME/opencode/opencode.json`）           | 以 profile 名称为键写入 `provider`，含模型列表；`--model` 对其无效                                 |
+| `dsh`         | `$DSH_HOME/settings.yaml`（默认 `$DSH_HOME` 为 `~/.dsh`），以及同目录 `.credentials.yaml`            | 写入 `llm-pi-ai.providers.<name>`；有 `--model` 时写入顶层 `agent-default-model`          |
+| `pi`          | `$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`（默认 `~/.pi/agent`） | 总会设置 `defaultProvider`（profile 名）与 `defaultModel`：有 `--model` 用该 id，否则用模型列表第一项   |
+
 
 ### 示例
 
@@ -223,10 +233,12 @@ agent-cli token use ds --tool pi --model deepseek-chat
 agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 ```
 
-| 标志 | 说明 |
-|------|------|
-| `--name` | 只同步指定 profile |
+
+| 标志           | 说明                                       |
+| ------------ | ---------------------------------------- |
+| `--name`     | 只同步指定 profile                            |
 | `--platform` | 过滤平台；与 `--name` 同时使用时，若 profile 平台不匹配会报错 |
+
 
 省略 `--name` 时同步全部匹配目标（可再按 `--platform` 过滤）。部分失败时：成功的会打印，失败的写到 stderr，退出码为 1。
 
@@ -252,22 +264,26 @@ agent-cli token sync-model-list --platform glm
 agent-cli token usage [--name <profile>] [--output table|text|raw]
 ```
 
-| 标志 | 说明 |
-|------|------|
-| `--name` | 只查指定 profile；省略则按名称排序查询全部 |
+
+| 标志         | 说明                                            |
+| ---------- | --------------------------------------------- |
+| `--name`   | 只查指定 profile；省略则按名称排序查询全部                     |
 | `--output` | `table`（默认，命令行表格）、`text`（文本摘要）、`raw`（原始 JSON） |
+
 
 不再支持 `--platform`；请按 profile 查询。
 
 ### 各平台查询方式
 
-| 平台 | 数据来源 | 说明 |
-|------|----------|------|
-| `deepseek` | `GET {baseUrl}/user/balance` | 使用 profile 中的 API token |
-| `kimi` | `GET {baseUrl}/users/me/balance` | 使用 profile 中的 API token |
-| `aliyun` | 本机 `bl usage token-plan --output json` | 需已安装 bailian-cli（`bl` 在 PATH 中），并先执行 `bl auth login --console`；**不读** profile 里的 API Key |
-| `tencent` | 腾讯云 TokenHub OpenAPI（`DescribeTokenPlanList`） | 使用环境变量 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` 查询该账户的 TokenPlan 套餐余量；region 用 `TENCENTCLOUD_REGION` 覆盖、默认 `ap-guangzhou`。凭据缺失时不发请求，提示设置或前往控制台：https://console.cloud.tencent.com/tokenhub。**不读** profile 里的 token。profile 的 `productType` 需为 `enterprise`（企业版专业套餐）或 `enterprise-auto`（企业版轻享套餐）；`add` 缺省写入 `personal`（个人版），个人版暂不支持查询 |
-| `glm` | — | 暂不支持 API 余额查询，请前往控制台：https://bigmodel.cn/coding-plan/personal/usage |
+
+| 平台         | 数据来源                                          | 说明                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `deepseek` | `GET {baseUrl}/user/balance`                  | 使用 profile 中的 API token                                                                                                                                                                                                                                                                                                                                                                                |
+| `kimi`     | `GET {baseUrl}/users/me/balance`              | 使用 profile 中的 API token                                                                                                                                                                                                                                                                                                                                                                                |
+| `aliyun`   | 本机 `bl usage token-plan --output json`        | 需已安装 bailian-cli（`bl` 在 PATH 中），并先执行 `bl auth login --console`；**不读** profile 里的 API Key                                                                                                                                                                                                                                                                                                               |
+| `tencent`  | 腾讯云 TokenHub OpenAPI（`DescribeTokenPlanList`） | 使用环境变量 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` 查询该账户的 TokenPlan 套餐余量；region 用 `TENCENTCLOUD_REGION` 覆盖、默认 `ap-guangzhou`。凭据缺失时不发请求，提示设置或前往控制台：[https://console.cloud.tencent.com/tokenhub。\*\*不读](https://console.cloud.tencent.com/tokenhub。**不读)\*\* profile 里的 token。profile 的 `productType` 需为 `enterprise`（企业版专业套餐）或 `enterprise-auto`（企业版轻享套餐）；`add` 缺省写入 `personal`（个人版），个人版暂不支持查询 |
+| `glm`      | —                                             | 暂不支持 API 余额查询，请前往控制台：[https://bigmodel.cn/coding-plan/personal/usage](https://bigmodel.cn/coding-plan/personal/usage)                                                                                                                                                                                                                                                                                  |
+
 
 多个 aliyun profile 只会实际调用一次 `bl`；多个 tencent profile 只会触发一次 TokenHub 查询（复用同一份结果）。某个 profile 失败时，错误写到 stderr，其它 profile 仍会继续；若全部失败则退出码为 1。
 
@@ -284,7 +300,7 @@ agent-cli token usage --name kimi-cn --output raw
 
 ## `token-server`
 
-本机常驻的凭据注入转发服务器。客户端只需把 baseUrl 指向本机端口，服务器会用 `switch` / `use` 选定的激活 profile 注入凭据并转发到上游；运行中 `switch` 下一个请求即生效，无需改客户端配置或重启客户端。首次使用前必须先执行 `gen-api-key` 生成服务器 API key（写入 `token-server.key`）；服务器对每个请求校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，未生成或 key 不匹配时返回 401，绝不转发凭据到上游。
+本机常驻的凭据注入转发服务器。客户端只需把 baseUrl 指向本机端口，服务器会用 `switch` 选定的激活 profile 注入凭据并转发到上游；运行中 `switch` 下一个请求即生效，无需改客户端配置或重启客户端。首次使用前必须先执行 `gen-api-key` 生成服务器 API key（写入 `token-server.key`）；服务器对每个请求校验 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，未生成或 key 不匹配时返回 401，绝不转发凭据到上游。
 
 ### 用法
 
@@ -298,6 +314,12 @@ agent-cli token-server start                   # 后台启动（默认 127.0.0.1
 agent-cli token-server start --port <port> [--foreground]
 agent-cli token-server stop                    # 终止并清理 pidfile
 ```
+
+端到端连通性自测（真实调用百炼模型，默认跳过）：
+
+```markdown
+TOKEN_SERVER_E2E_BAILIAN_TOKEN=sk-... pnpm test
+# 可选：TOKEN_SERVER_E2E_BAILIAN_BASE=<OpenAI 兼容端点> / TOKEN_SERVER_E2E_BAILIAN_MODEL=<模型>
 
 ### 客户端 baseUrl 约定
 
@@ -313,6 +335,14 @@ agent-cli token-server stop                    # 终止并清理 pidfile
 - 仅监听本机回环地址 `127.0.0.1`，不接受远程连接；请求必须携带 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，key 由 `token-server gen-api-key` 生成（重复执行会轮换，旧 key 立即失效）。
 - 未执行 `gen-api-key` 时 `start` / `use` 会直接报错，服务器也不会放行任何请求。
 - 不要在不可信的本机环境下运行；日志、错误响应与帮助文本不包含 token 或 key。
+
+---
+
+## 真实工具验收环境（Docker）
+
+单测覆盖不了「写出的配置真实 CLI 认不认」「token-server 转发链路真的通不通」。仓库提供一套可选的 Docker 验收环境：容器内预装 Claude Code、OpenCode、pi、DeepSeek Harness 四个真实工具，用**真实凭据与真实上游**分两条路径验收 `token use`（配置写入真实性）与 `token-server`（端到端）。需要真实凭据、只在本地手动跑、不进 CI。
+
+用法、变量与已知局限见 [docker/README.md](docker/README.md)。
 
 ---
 

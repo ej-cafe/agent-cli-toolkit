@@ -123,6 +123,9 @@ describe("token-server lifecycle (integration)", () => {
       const info = await waitFor(() => readPidFile());
       assert.equal(info.pid, child.pid);
 
+      // pidfile 是同步落盘、立即可见，stdout 到管道要等刷新；
+      // 若不等凭据行到达就断言，满负载下会读到「正在监听」而已（偶发失败）。
+      await waitFor(() => (childOut.includes("apiKey: test-server-key") ? true : undefined));
       assert.match(childOut, /OpenAI 兼容 baseUrl: http:\/\/127\.0\.0\.1:\d+\/v1/);
       assert.match(
         childOut,

@@ -110,9 +110,16 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
+# JetBrains IDEs
+.idea/
+
 # yarn v2
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Docker e2e 真实凭据（见 docker/README.md）
+docker/.env
+docker/envs/*.env

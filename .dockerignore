@@ -1,0 +1,21 @@
+# 构建上下文是仓库根；只保留构建镜像所需内容。
+.git
+.github
+.idea
+.cursor
+.claude
+.agents
+openspec
+
+# pnpm 的 node_modules 是符号链接，拷进镜像会坏且巨大
+**/node_modules
+
+# 构建产物在镜像内重新生成
+**/dist
+**/*.tsbuildinfo
+
+# 真实凭据不入镜像
+docker/.env
+docker/envs/*.env
+
+*.log

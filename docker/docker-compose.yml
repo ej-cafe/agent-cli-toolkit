@@ -1,0 +1,47 @@
+# 一次性验收任务：a-config-use（A：配置写入真实性）、b-token-server（B：token-server 端到端）。
+#
+#   # 单平台（默认读 docker/.env）
+#   cp docker/.env.example docker/.env                    # 填真实凭据
+#   docker compose -f docker/docker-compose.yml run --rm a-config-use
+#   docker compose -f docker/docker-compose.yml run --rm b-token-server
+#
+#   # 切平台：--env-file 指到该平台文件，优先级高于 docker/.env
+#   cp docker/envs/deepseek.env.example docker/envs/deepseek.env
+#   docker compose -f docker/docker-compose.yml --env-file docker/envs/deepseek.env run --rm a-config-use
+#
+# 容器内全新 $HOME，不挂载宿主机任何工具配置目录；只读挂载 e2e 脚本便于改动免重建。
+
+name: agent-cli-toolkit-e2e
+
+x-e2e-base: &e2e-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  platform: linux/amd64
+  environment:
+    HOME: /home/tester
+    # 凭据与平台设置一律经 compose 插值注入：默认取项目 .env（即 docker/.env），
+    # 传 --env-file 则后者优先。空值等于「未设置」，脚本会走自己的默认值
+    # （见 docker/scripts/lib.sh 与 run-*.sh），因此每平台文件显式写空值即可覆盖掉
+    # docker/.env 里同名变量，不会串台。
+    E2E_PLATFORM: ${E2E_PLATFORM:-}
+    E2E_TOKEN: ${E2E_TOKEN:-}
+    E2E_BASE_URL: ${E2E_BASE_URL:-}
+    E2E_CLAUDE_BASE_URL: ${E2E_CLAUDE_BASE_URL:-}
+    E2E_MODEL: ${E2E_MODEL:-}
+    E2E_PROMPT: ${E2E_PROMPT:-}
+    E2E_PROFILE_NAME: ${E2E_PROFILE_NAME:-}
+    E2E_SWITCH_PROFILE_NAME: ${E2E_SWITCH_PROFILE_NAME:-}
+    E2E_TIMEOUT: ${E2E_TIMEOUT:-}
+    E2E_SERVER_PORT: ${E2E_SERVER_PORT:-}
+  volumes:
+    - ./scripts:/repo/docker/scripts:ro
+
+services:
+  a-config-use:
+    <<: *e2e-base
+    command: ["bash", "/repo/docker/scripts/run-a-config-use.sh"]
+
+  b-token-server:
+    <<: *e2e-base
+    command: ["bash", "/repo/docker/scripts/run-b-token-server.sh"]

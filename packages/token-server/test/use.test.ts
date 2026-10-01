@@ -160,6 +160,7 @@ describe("token-server use", () => {
     );
     assert.equal(opencode.provider.work.options.apiKey, "use-key-123");
     assert.equal(opencode.provider.work.options.baseURL, openaiUrl);
+    assert.equal(opencode.provider.work.npm, "@ai-sdk/openai");
 
     const settings = readFileSync(join(dshHome, "settings.yaml"), "utf8");
     assert.match(settings, /baseURL: http:\/\/127\.0\.0\.1:8787\/v1/);

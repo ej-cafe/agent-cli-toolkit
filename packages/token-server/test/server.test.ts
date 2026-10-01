@@ -152,6 +152,27 @@ describe("token-server forwarding", () => {
     assert.equal(seen[0]?.headers["x-api-key"], undefined);
   });
 
+  it("strips the local /v1 mount prefix so upstream URLs are not doubled", async () => {
+    const seen: SeenRequest[] = [];
+    const port = await start({
+      resolveProfile: () =>
+        profile({ baseUrl: "https://api.example.com/v1", token: "secret-token" }),
+      fetchImpl: recordingFetch(seen),
+    });
+
+    // opencode（OpenAI 风格）baseURL 为 http://127.0.0.1:<port>/v1，
+    // OpenAI SDK 会请求 /v1/chat/completions；上游 baseUrl 已含 /v1，不得拼成双 /v1。
+    await clientRequest(port, {
+      path: "/v1/chat/completions",
+      method: "POST",
+      headers: authHeaders({ "content-type": "application/json" }),
+      body: "{}",
+    });
+
+    assert.equal(seen[0]?.url, "https://api.example.com/v1/chat/completions");
+    assert.equal(seen[0]?.headers["authorization"], "Bearer secret-token");
+  });
+
   it("routes /anthropic to claudeBaseUrl and strips the prefix", async () => {
     const seen: SeenRequest[] = [];
     const port = await start({
@@ -464,13 +485,13 @@ describe("token-server forwarding", () => {
       });
 
       await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
-      assert.equal(seen[0]?.url, "https://a.example.com/v1/ping");
+      assert.equal(seen[0]?.url, "https://a.example.com/ping");
       assert.equal(seen[0]?.headers["authorization"], "Bearer token-a");
 
       writeActiveProfile("b");
 
       await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
-      assert.equal(seen[1]?.url, "https://b.example.com/v1/ping");
+      assert.equal(seen[1]?.url, "https://b.example.com/ping");
       assert.equal(seen[1]?.headers["authorization"], "Bearer token-b");
     } finally {
       cleanup();

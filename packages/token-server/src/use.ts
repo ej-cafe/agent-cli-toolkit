@@ -174,7 +174,7 @@ function applyTools(
     if (tool === "claude-code") {
       applyClaudeCode(profile, modelId);
     } else if (tool === "opencode") {
-      applyOpenCode(name, openaiProfile);
+      applyOpenCode(name, openaiProfile, "@ai-sdk/openai");
     } else if (tool === "dsh") {
       applyDsh(name, openaiProfile, modelId);
     } else if (piModelId !== undefined) {

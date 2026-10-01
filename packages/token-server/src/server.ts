@@ -28,6 +28,9 @@ export type TokenServerOptions = {
 
 const anthropicPrefix = "/anthropic";
 
+/** 本地 OpenAI 兼容端点挂载前缀：`use` 写入工具 baseURL 为 `http://<host>:<port>/v1`。 */
+const openaiPrefix = "/v1";
+
 const hopByHopHeaders = new Set([
   "connection",
   "keep-alive",
@@ -48,6 +51,10 @@ function isAnthropicPath(pathname: string): boolean {
   return pathname === anthropicPrefix || pathname.startsWith(`${anthropicPrefix}/`);
 }
 
+function isOpenAiPath(pathname: string): boolean {
+  return pathname === openaiPrefix || pathname.startsWith(`${openaiPrefix}/`);
+}
+
 function joinUpstreamUrl(base: string, pathname: string, search: string): string {
   const baseUrl = new URL(base);
   const basePath = baseUrl.pathname.replace(/\/+$/, "");
@@ -62,10 +69,17 @@ function resolveUpstream(
   search: string,
 ): { url: string; anthropic: boolean } {
   const anthropic = isAnthropicPath(pathname);
-  const rest = anthropic ? pathname.slice(anthropicPrefix.length) : pathname;
+  // 剥掉本地挂载前缀后，把剩余路径拼到上游 base：
+  // - /anthropic/.. 剥掉 /anthropic，保留 /v1/messages（claudeBaseUrl 末尾通常不含 /v1）
+  // - /v1/.. 剥掉 /v1（baseUrl 通常已含 /v1，避免拼成双 /v1）
+  const rest = anthropic
+    ? pathname.slice(anthropicPrefix.length)
+    : isOpenAiPath(pathname)
+      ? pathname.slice(openaiPrefix.length)
+      : pathname;
   const restPath = rest === "" ? "/" : rest;
   const base = anthropic
-    ? profile.claudeBaseUrl?.trim() || profile.baseUrl
+    ? (profile.claudeBaseUrl?.trim() || profile.baseUrl)
     : profile.baseUrl;
   return { url: joinUpstreamUrl(base, restPath, search), anthropic };
 }
@@ -122,7 +136,7 @@ async function handleRequest(
   const method = req.method ?? "GET";
 
   // 鉴权门：入站请求必须携带与已配置 key 匹配的凭据。
-  // OpenAI 风格客户端发 `Authorization: Bearer <key>`，Anthropic 风格客户端（Claude Code / OpenCode）发 `x-api-key: <key>`。
+  // OpenAI 风格客户端发 `Authorization: Bearer <key>`，Anthropic 风格客户端（Claude Code）发 `x-api-key: <key>`。
   const configuredKey = options.resolveApiKey();
   const gotAuth = req.headers.authorization?.trim();
   const rawApiKey = req.headers["x-api-key"];

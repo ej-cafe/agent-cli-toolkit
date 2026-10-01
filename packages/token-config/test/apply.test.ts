@@ -286,21 +286,44 @@ describe("applyOpenCode", () => {
     );
   }
 
-  it("creates a provider with npm fallback and options", () => {
-    applyOpenCode("my-pro", profile({ claudeBaseUrl: "https://c.test" }));
-    const root = readJson(configPath());
-    const provider = (root.provider as Record<string, unknown>)[
+  function readProvider(): Record<string, unknown> {
+    return (readJson(configPath()).provider as Record<string, unknown>)[
       "my-pro"
     ] as Record<string, unknown>;
+  }
+
+  function providerOptions(): Record<string, unknown> {
+    return readProvider().options as Record<string, unknown>;
+  }
+
+  it("creates a provider with npm fallback and options", () => {
+    applyOpenCode("my-pro", profile({ claudeBaseUrl: "https://c.test" }));
+    const provider = readProvider();
     assert.equal(provider.name, "my-pro");
     assert.equal(provider.npm, "@ai-sdk/anthropic");
     const options = provider.options as Record<string, unknown>;
     assert.equal(options.apiKey, "sk-test");
-    assert.equal(options.baseURL, "https://c.test");
+    // @ai-sdk/anthropic 只拼 /messages，故 baseURL 必须自带 /v1
+    assert.equal(options.baseURL, "https://c.test/v1");
     assert.deepEqual(provider.models, {
       m1: { name: "Model One" },
       m2: { name: "Model Two" },
     });
+  });
+
+  it("does not append /v1 twice when the address already ends with it", () => {
+    applyOpenCode("my-pro", profile({ claudeBaseUrl: "https://c.test/v1" }));
+    assert.equal(providerOptions().baseURL, "https://c.test/v1");
+  });
+
+  it("keeps the OpenAI-compatible address as is when npm is overridden", () => {
+    applyOpenCode(
+      "my-pro",
+      profile({ baseUrl: "https://c.test/v1" }),
+      "@ai-sdk/openai",
+    );
+    assert.equal(readProvider().npm, "@ai-sdk/openai");
+    assert.equal(providerOptions().baseURL, "https://c.test/v1");
   });
 
   it("keeps existing npm and unknown provider fields", () => {
@@ -317,7 +340,12 @@ describe("applyOpenCode", () => {
 
     applyOpenCode(
       "my-pro",
-      profile({ token: "sk-second", models: [{ id: "m2", name: "Renamed" }] }),
+      profile({
+        token: "sk-second",
+        models: [{ id: "m2", name: "Renamed" }],
+        // 不带 /v1：非 anthropic 包时必须原样写入，不得补 /v1
+        baseUrl: "https://example.test",
+      }),
     );
     const provider = (readJson(configPath()).provider as Record<string, unknown>)[
       "my-pro"
@@ -327,6 +355,10 @@ describe("applyOpenCode", () => {
     assert.equal(
       (provider.options as Record<string, unknown>).apiKey,
       "sk-second",
+    );
+    assert.equal(
+      (provider.options as Record<string, unknown>).baseURL,
+      "https://example.test",
     );
     assert.deepEqual(provider.models, {
       m1: { name: "Model One" },
