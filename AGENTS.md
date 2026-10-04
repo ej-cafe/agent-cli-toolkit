@@ -28,7 +28,16 @@ pnpm exec agent-cli --help
 pnpm --filter <package> <script>
 ```
 
-开发用 `tsx` 跑源码；发布产物在各包 `dist/`。单测用 Node 内置 `node:test`（经 `tsx` 直跑 TS），放在各包 `test/` 目录（`*.test.ts`，不进 `tsc -b` 构建图）；测试间用临时 `XDG_CONFIG_HOME` / 环境变量隔离，不触真实用户配置。
+开发用 `tsx` 跑源码；`pnpm build` 先 `tsc -b` 编译各包，再用 esbuild 把 `apps/cli` 打成单文件根 `dist/main.js`。单测用 Node 内置 `node:test`（经 `tsx` 直跑 TS），放在各包 `test/` 目录（`*.test.ts`，不进 `tsc -b` 构建图）；测试间用临时 `XDG_CONFIG_HOME` / 环境变量隔离，不触真实用户配置。
+
+## 发布
+
+npm 只发布根包 `agent-cli-toolkit`；`apps/*`、`packages/*` 为 `private`，不单独发布。产物是单文件 bundle `dist/main.js`（bin `agent-cli`，自包含无运行时依赖）。
+
+1. 同步改两处版本号：根 `package.json` 的 `version` 与 `packages/core/src/index.ts` 的 `getVersion()`。
+2. `pnpm typecheck && pnpm test`。
+3. `pnpm publish`（`prepublishOnly` 会先跑 `pnpm build`；需 npm 登录）。
+4. 干净环境验证：`npm i -g agent-cli-toolkit@<version>` 后 `agent-cli --version`。
 
 ## 工作方式
 
