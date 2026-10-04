@@ -1,7 +1,6 @@
 {
   "name": "agent-cli-toolkit",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.1",
   "type": "module",
   "packageManager": "pnpm@12.3.4",
   "engines": {
