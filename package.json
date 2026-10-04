@@ -1,19 +1,27 @@
 {
   "name": "agent-cli-toolkit",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "packageManager": "pnpm@12.3.4",
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "agent-cli": "dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/bundle.mjs",
     "typecheck": "tsc -b",
+    "prepublishOnly": "pnpm build",
     "test": "node --import tsx --test packages/*/test/*.test.ts",
     "dev": "pnpm --filter @agent-cli-toolkit/cli dev"
   },
   "devDependencies": {
     "@agent-cli-toolkit/cli": "workspace:*",
+    "esbuild": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   }
