@@ -31,8 +31,8 @@ const tokenCommands: readonly TokenCommand[] = [
   {
     verb: "use",
     usage:
-      "agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]",
-    hint: "（--model 对 Claude Code、DeepSeek Harness（dsh）与 pi 有效；应用到 pi 时总会设置 defaultProvider（profile 名称）与 defaultModel，有 --model 用该 id，否则用模型列表第一项；配置目录或对应程序不存在时跳过该工具，且不创建该配置目录。显示名是 DeepSeek Harness（dsh），--tool 的取值仍是 dsh）",
+      "agent-cli token use [<name>] [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]",
+    hint: "（交互式终端可省略 <name> 选择已保存 profile，省略 --model 选择默认模型；--model 对 Claude Code、DeepSeek Harness（dsh）与 pi 有效；应用到 pi 时总会设置 defaultProvider（profile 名称）与 defaultModel，有 --model 或交互选择时用该 id，否则用模型列表第一项；配置目录或对应程序不存在时跳过该工具，且不创建该配置目录。显示名是 DeepSeek Harness（dsh），--tool 的取值仍是 dsh）",
     run: runTokenUse,
   },
   {

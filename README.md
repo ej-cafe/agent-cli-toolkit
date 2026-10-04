@@ -53,7 +53,7 @@ token profile（含各自的模型列表）保存在该目录下的 `token-profi
 agent-cli token add [--name <name>] [--platform <aliyun|tencent|deepseek|kimi|glm>] [--token <token>] [--base-url <url>] [--claude-base-url <url>] [--product-type <productType>]
 agent-cli token delete <name>
 agent-cli token list
-agent-cli token use <name> [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
+agent-cli token use [<name>] [--all | --tool <claude-code|opencode|dsh|pi>] [--model <id>]
 agent-cli token sync-model-list [--name <profile>] [--platform <aliyun|tencent|deepseek|kimi|glm>]
 agent-cli token usage [--name <profile>] [--output table|text|raw]
 agent-cli token-server start [--port <port>] [--foreground]
@@ -178,7 +178,7 @@ agent-cli token list
 ### 用法
 
 ```bash
-agent-cli token use <name> [--all | --tool <id>] [--model <id>]
+agent-cli token use [<name>] [--all | --tool <id>] [--model <id>]
 ```
 
 
@@ -186,10 +186,16 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 | --------- | ------------------------------------------------------------------------------ |
 | `--all`   | 同步到全部已对接工具                                                                     |
 | `--tool`  | 指定工具，可重复：`claude-code`、`opencode`、`dsh`、`pi`。`dsh` 的显示名是 DeepSeek Harness（dsh） |
-| `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中）                                                |
+| `--model` | 指定默认模型 id（须存在于该 profile 的模型列表中）；省略时可在交互终端选择                                     |
 
 
 未指定 `--all` 或 `--tool` 时，会在交互终端选择目标工具（编号或 id，逗号/空格分隔）。`--model` 仅对 `claude-code`、`dsh`、`pi` 有效；若目标只有 `opencode` 并传了 `--model`，会报错。
+
+省略 `<name>` 时，交互终端（stdin 为 TTY）会列出全部已保存 profile（可输入编号或名称）供选择；非 TTY 或没有任何已保存 profile 时直接报错，不进入问答。
+
+省略 `--model` 时，若本次就绪的工具含 `claude-code` / `dsh` / `pi` 且该 profile 有模型，会在选完工具后列出模型 `id`（可附 `name`）供选择（编号或 id），直接回车跳过。问答顺序为 profile → 工具 → 模型。
+
+显式传入 `--model` 时不进入模型问答；省略 `--model` 且非 TTY 时保持原行为：`pi` 用模型列表第一项，`claude-code` / `dsh` 保留配置中的原值。
 
 配置目录或对应程序不存在的工具会被**跳过**（不创建该配置目录），并向 stderr 说明缺失项；stdout 只列出实际写入的工具。全部候选都被跳过时以退出码 0 结束。
 
@@ -201,7 +207,7 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 | `claude-code` | `~/.claude/settings.json` 的 `env`                                                         | 写入 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`；有 `--model` 时写入 `ANTHROPIC_MODEL` |
 | `opencode`    | `~/.config/opencode/opencode.json`（或 `$XDG_CONFIG_HOME/opencode/opencode.json`）           | 以 profile 名称为键写入 `provider`，含模型列表；`--model` 对其无效                                 |
 | `dsh`         | `$DSH_HOME/settings.yaml`（默认 `$DSH_HOME` 为 `~/.dsh`），以及同目录 `.credentials.yaml`            | 写入 `llm-pi-ai.providers.<name>`；有 `--model` 时写入顶层 `agent-default-model`          |
-| `pi`          | `$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`（默认 `~/.pi/agent`） | 总会设置 `defaultProvider`（profile 名）与 `defaultModel`：有 `--model` 用该 id，否则用模型列表第一项   |
+| `pi`          | `$PI_CODING_AGENT_DIR` 下的 `models.json` / `auth.json` / `settings.json`（默认 `~/.pi/agent`） | 总会设置 `defaultProvider`（profile 名）与 `defaultModel`：有 `--model` 或交互选择时用该 id，否则用模型列表第一项   |
 
 
 ### 示例
@@ -209,6 +215,9 @@ agent-cli token use <name> [--all | --tool <id>] [--model <id>]
 ```bash
 # 同步到全部工具
 agent-cli token use ds --all
+
+# 省略 <name> 与 --model：交互选择 profile 与默认模型
+agent-cli token use
 
 # 只写 Claude Code，并指定默认模型
 agent-cli token use ds --tool claude-code --model deepseek-chat

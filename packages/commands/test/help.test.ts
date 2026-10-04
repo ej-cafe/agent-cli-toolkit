@@ -59,6 +59,12 @@ describe("printHelp", () => {
     assert.match(stdout, /可省略标志，在终端问答补齐/);
     assert.match(
       stdout,
+      /agent-cli token use \[<name>\] \[--all \| --tool <claude-code\|opencode\|dsh\|pi>\] \[--model <id>\]/,
+    );
+    assert.match(stdout, /省略 <name> 可在交互式终端选择 profile/);
+    assert.match(stdout, /省略时可在交互式终端选择/);
+    assert.match(
+      stdout,
       /--model.*对 Claude Code、DeepSeek Harness（dsh）与 pi 有效/,
     );
     assert.match(stdout, /defaultProvider/);
