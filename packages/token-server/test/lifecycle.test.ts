@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { logFilePath } from "../src/paths.js";
+import { accessBodyLogPath, accessLogPath, logFilePath } from "../src/paths.js";
 import { isProcessAlive, readPidFile } from "../src/pidfile.js";
 import { writeActiveProfile } from "../src/state.js";
 import { installApiKey, profile, useTempXdgConfig, writeProfiles } from "./helpers.js";
@@ -182,6 +182,23 @@ describe("token-server lifecycle (integration)", () => {
       assert.equal(res.status, 200);
       assert.equal(await res.text(), "pong");
 
+      // 访问记录必须带上当前激活 profile 名（lifecycle 注入 readActiveProfile）。
+      await waitFor(() => {
+        if (!existsSync(accessLogPath())) {
+          return undefined;
+        }
+        const records = readFileSync(accessLogPath(), "utf8")
+          .split("\n")
+          .filter((line) => line.trim() !== "")
+          .map((line) => JSON.parse(line) as { path?: unknown; profile?: unknown; status?: unknown });
+        return records.some(
+          (record) =>
+            record.profile === "work" && record.path === "/v1/models" && record.status === 200,
+        )
+          ? true
+          : undefined;
+      });
+
       // 守护子进程的输出进日志文件，但 API key 不得出现在日志中。
       const log = readFileSync(logFilePath(), "utf8");
       assert.doesNotMatch(log, /test-server-key/);
@@ -194,6 +211,124 @@ describe("token-server lifecycle (integration)", () => {
       await waitFor(() =>
         isProcessAlive(info.pid) ? undefined : true,
       );
+    } finally {
+      if (daemonPid !== undefined && isProcessAlive(daemonPid)) {
+        try {
+          process.kill(daemonPid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+    }
+  });
+
+  it("daemon records request bodies by default", async () => {
+    const upstreamPort = await startUpstream();
+    writeProfiles({
+      work: profile({ baseUrl: `http://127.0.0.1:${upstreamPort}`, token: "tok" }),
+    });
+    writeActiveProfile("work");
+    installApiKey();
+
+    let daemonPid: number | undefined;
+    try {
+      const started = await runCli([
+        "token-server",
+        "start",
+        "--port",
+        "0",
+      ]);
+      assert.equal(started.code, 0, started.stderr);
+
+      const info = await waitFor(() => readPidFile());
+      daemonPid = info.pid;
+
+      const res = await fetch(`http://127.0.0.1:${info.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-server-key",
+          "content-type": "application/json",
+        },
+        body: '{"prompt":"hi"}',
+      });
+      assert.equal(res.status, 200);
+
+      await waitFor(() => {
+        if (!existsSync(accessBodyLogPath())) {
+          return undefined;
+        }
+        const records = readFileSync(accessBodyLogPath(), "utf8")
+          .split("\n")
+          .filter((line) => line.trim() !== "")
+          .map((line) => JSON.parse(line) as { requestBody?: unknown; responseBody?: unknown; profile?: unknown });
+        return records.some(
+          (record) =>
+            record.profile === "work" &&
+            record.requestBody === '{"prompt":"hi"}' &&
+            record.responseBody === "pong",
+        )
+          ? true
+          : undefined;
+      });
+
+      const stopped = await runCli(["token-server", "stop"]);
+      assert.equal(stopped.code, 0, stopped.stderr);
+    } finally {
+      if (daemonPid !== undefined && isProcessAlive(daemonPid)) {
+        try {
+          process.kill(daemonPid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+    }
+  });
+
+  it("daemon leaves out the body file when started with --no-trace-body", async () => {
+    const upstreamPort = await startUpstream();
+    writeProfiles({
+      work: profile({ baseUrl: `http://127.0.0.1:${upstreamPort}`, token: "tok" }),
+    });
+    writeActiveProfile("work");
+    installApiKey();
+
+    let daemonPid: number | undefined;
+    try {
+      const started = await runCli([
+        "token-server",
+        "start",
+        "--port",
+        "0",
+        "--no-trace-body",
+      ]);
+      assert.equal(started.code, 0, started.stderr);
+
+      const info = await waitFor(() => readPidFile());
+      daemonPid = info.pid;
+
+      const res = await fetch(`http://127.0.0.1:${info.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-server-key",
+          "content-type": "application/json",
+        },
+        body: '{"prompt":"hi"}',
+      });
+      assert.equal(res.status, 200);
+
+      await waitFor(() => {
+        if (!existsSync(accessLogPath())) {
+          return undefined;
+        }
+        const lines = readFileSync(accessLogPath(), "utf8")
+          .split("\n")
+          .filter((line) => line.trim() !== "");
+        return lines.length >= 1 ? true : undefined;
+      });
+      assert.equal(existsSync(accessBodyLogPath()), false);
+
+      const stopped = await runCli(["token-server", "stop"]);
+      assert.equal(stopped.code, 0, stopped.stderr);
     } finally {
       if (daemonPid !== undefined && isProcessAlive(daemonPid)) {
         try {

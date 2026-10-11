@@ -20,3 +20,13 @@ export function apiKeyPath(): string {
 export function logFilePath(): string {
   return join(getConfigDir(), "token-server.log");
 }
+
+/** 代理访问记录文件（JSON Lines，始终开启）。 */
+export function accessLogPath(): string {
+  return join(getConfigDir(), "token-server-access.jsonl");
+}
+
+/** 请求体追踪文件（JSON Lines；默认写入，`--no-trace-body` 时关闭）。 */
+export function accessBodyLogPath(): string {
+  return join(getConfigDir(), "token-server-access-body.jsonl");
+}

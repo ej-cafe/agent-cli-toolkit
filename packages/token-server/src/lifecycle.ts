@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
-import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Application } from "express";
 import { resolveActiveProfile } from "./active-profile.js";
 import { fail } from "./errors.js";
 import { readApiKey } from "./key.js";
@@ -13,6 +13,7 @@ import {
   writePidFile,
 } from "./pidfile.js";
 import { createTokenServer } from "./server.js";
+import { readActiveProfile } from "./state.js";
 
 export const serverHost = "127.0.0.1";
 
@@ -20,13 +21,20 @@ const readyTimeoutMs = 5_000;
 const stopTimeoutMs = 3_000;
 const pollIntervalMs = 50;
 
+/** Express `app.listen()` 返回的底层 server 句柄，仅用于 `address()` / `close()`。 */
+type ListeningServer = ReturnType<Application["listen"]>;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
-async function listen(server: Server, port: number): Promise<number> {
+async function listen(
+  app: Application,
+  port: number,
+): Promise<{ server: ListeningServer; port: number }> {
+  const server = app.listen(port, serverHost);
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error): void => {
       server.off("listening", onListening);
@@ -38,14 +46,13 @@ async function listen(server: Server, port: number): Promise<number> {
     };
     server.once("error", onError);
     server.once("listening", onListening);
-    server.listen(port, serverHost);
   });
 
   const address = server.address() as AddressInfo | null;
   if (address === null || typeof address === "string") {
     fail("无法确定监听地址");
   }
-  return address.port;
+  return { server, port: address.port };
 }
 
 /** 打印客户端所需的连接信息：两个 baseUrl 约定与服务器 API key。 */
@@ -63,18 +70,22 @@ function printBaseUrlAndKey(host: string, port: number): void {
 export async function runForeground(
   port: number,
   printCredentials = false,
+  traceBody = true,
 ): Promise<number> {
-  const server = createTokenServer({
+  const app = createTokenServer({
     resolveProfile: resolveActiveProfile,
+    resolveProfileName: readActiveProfile,
     resolveApiKey: readApiKey,
+    traceBody,
   });
-  let boundPort: number;
+  let bound: { server: ListeningServer; port: number };
   try {
-    boundPort = await listen(server, port);
+    bound = await listen(app, port);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     fail(`无法监听 ${serverHost}:${port}（${reason}）`);
   }
+  const { server, port: boundPort } = bound;
 
   writePidFile({ pid: process.pid, host: serverHost, port: boundPort });
   process.stdout.write(
@@ -99,7 +110,7 @@ export async function runForeground(
 }
 
 /** 后台守护启动：spawn 一个前台子进程，轮询 pidfile 判定就绪。 */
-export async function startDaemon(port: number): Promise<number> {
+export async function startDaemon(port: number, traceBody = true): Promise<number> {
   const existing = readPidFile();
   if (existing !== undefined && isProcessAlive(existing.pid)) {
     fail(
@@ -126,6 +137,7 @@ export async function startDaemon(port: number): Promise<number> {
         "--foreground",
         "--port",
         String(port),
+        ...(traceBody ? [] : ["--no-trace-body"]),
       ],
       {
         detached: true,

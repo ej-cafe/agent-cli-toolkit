@@ -16,9 +16,11 @@
   },
   "dependencies": {
     "@agent-cli-toolkit/core": "workspace:*",
-    "@agent-cli-toolkit/token-config": "workspace:*"
+    "@agent-cli-toolkit/token-config": "workspace:*",
+    "express": "catalog:"
   },
   "devDependencies": {
+    "@types/express": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   }

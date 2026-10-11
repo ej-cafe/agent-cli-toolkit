@@ -28,11 +28,14 @@ const e2eBase = (
 const e2eModel =
   process.env.TOKEN_SERVER_E2E_BAILIAN_MODEL?.trim() || "qwen-turbo";
 
-function listen(server: Server): Promise<number> {
+function listen(
+  app: ReturnType<typeof createTokenServer>,
+): Promise<{ server: Server; port: number }> {
   return new Promise((resolve, reject) => {
+    const server = app.listen(0, "127.0.0.1");
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      resolve((server.address() as AddressInfo).port);
+    server.once("listening", () => {
+      resolve({ server, port: (server.address() as AddressInfo).port });
     });
   });
 }
@@ -64,12 +67,12 @@ describe("token-server e2e（真实百炼模型连通性）", () => {
       writeActiveProfile("bailian-e2e");
       installApiKey();
 
-      const server = createTokenServer({
+      const app = createTokenServer({
         resolveProfile: resolveActiveProfile,
         resolveApiKey: readApiKey,
       });
+      const { server, port } = await listen(app);
       servers.push(server);
-      const port = await listen(server);
 
       // 模拟 OpenAI 风格客户端（与 dsh / pi / opencode 一致）：Authorization: Bearer <服务器 key>。
       const res = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {

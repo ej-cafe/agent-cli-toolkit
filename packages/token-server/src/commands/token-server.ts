@@ -12,7 +12,7 @@ const defaultPort = 8787;
 
 const usageText = [
   "用法:",
-  "  agent-cli token-server start [--port <port>] [--foreground]",
+  "  agent-cli token-server start [--port <port>] [--foreground] [--no-trace-body]",
   "  agent-cli token-server stop",
   "  agent-cli token-server switch <profile>",
   "  agent-cli token-server use [--all | --tool <id>] [--model <id>]",
@@ -36,6 +36,7 @@ async function runStart(args: string[]): Promise<number> {
     options: {
       port: { type: "string" },
       foreground: { type: "boolean", default: false },
+      "no-trace-body": { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -51,11 +52,12 @@ async function runStart(args: string[]): Promise<number> {
   if (readApiKey() === undefined) {
     fail("尚未生成 token-server API key；请先执行: agent-cli token-server gen-api-key");
   }
+  const traceBody = !values["no-trace-body"];
   if (values.foreground) {
     const daemonChild = process.env.AGENT_CLI_TOKEN_SERVER_DAEMON_CHILD === "1";
-    return runForeground(port, !daemonChild);
+    return runForeground(port, !daemonChild, traceBody);
   }
-  return startDaemon(port);
+  return startDaemon(port, traceBody);
 }
 
 function runGenApiKey(args: string[]): number {

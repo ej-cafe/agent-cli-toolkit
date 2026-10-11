@@ -106,6 +106,9 @@ describe("printHelp", () => {
       "missing token-server gen-api-key",
     );
     assert.match(stdout, /--foreground/);
+    assert.doesNotMatch(stdout, /--trace-body/);
+    assert.match(stdout, /--no-trace-body/);
+    assert.match(stdout, /token-server-access-body\.jsonl/);
     assert.match(stdout, /--all/);
     assert.match(stdout, /--tool/);
     assert.match(stdout, /仅监听 127\.0\.0\.1/);

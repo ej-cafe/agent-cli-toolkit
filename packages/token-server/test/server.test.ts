@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { PassThrough, Readable } from "node:stream";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import type { TokenProfile } from "@agent-cli-toolkit/token-config";
 import { resolveActiveProfile } from "../src/active-profile.js";
 import {
@@ -36,11 +36,14 @@ type ClientResponse = {
   body: string;
 };
 
-function listen(server: Server): Promise<number> {
+function listen(
+  app: ReturnType<typeof createTokenServer>,
+): Promise<{ server: Server; port: number }> {
   return new Promise((resolve, reject) => {
+    const server = app.listen(0, "127.0.0.1");
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      resolve((server.address() as AddressInfo).port);
+    server.once("listening", () => {
+      resolve({ server, port: (server.address() as AddressInfo).port });
     });
   });
 }
@@ -90,6 +93,12 @@ function sleep(ms: number): Promise<void> {
 
 describe("token-server forwarding", () => {
   const servers: Server[] = [];
+  let cleanupXdg: () => void;
+
+  beforeEach(() => {
+    // 服务器始终写访问记录：用临时配置目录隔离，避免触到真实用户配置。
+    ({ cleanup: cleanupXdg } = useTempXdgConfig());
+  });
 
   afterEach(async () => {
     await Promise.all(
@@ -102,6 +111,7 @@ describe("token-server forwarding", () => {
           }),
       ),
     );
+    cleanupXdg();
   });
 
   async function start(
@@ -112,14 +122,15 @@ describe("token-server forwarding", () => {
       log?: (line: string) => void;
     },
   ): Promise<number> {
-    const server = createTokenServer({
+    const app = createTokenServer({
       resolveProfile: options.resolveProfile,
       resolveApiKey: options.resolveApiKey ?? (() => testApiKey),
       fetchImpl: options.fetchImpl,
       log: options.log ?? (() => {}),
     });
+    const { server, port } = await listen(app);
     servers.push(server);
-    return listen(server);
+    return port;
   }
 
   function recordingFetch(store: SeenRequest[], response = new Response("ok")) {
@@ -248,12 +259,20 @@ describe("token-server forwarding", () => {
   it("preserves the upstream status code", async () => {
     const port = await start({
       resolveProfile: () => profile(),
-      fetchImpl: async () => new Response("slow down", { status: 429 }),
+      fetchImpl: async () =>
+        new Response("slow down", {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        }),
     });
 
     const res = await clientRequest(port, { path: "/models", headers: authHeaders() });
     assert.equal(res.status, 429);
     assert.equal(res.body, "slow down");
+    // 上游状态码与 content-type 逐字透传。
+    assert.equal(res.headers["content-type"], "application/json");
+    // 代理不得新增 Express 默认的 x-powered-by 头。
+    assert.equal(res.headers["x-powered-by"], undefined);
   });
 
   it("returns 503 without calling upstream when there is no active profile", async () => {
@@ -390,44 +409,39 @@ describe("token-server forwarding", () => {
   });
 
   it("re-reads the api key on every request so rotation takes effect", async () => {
-    const { cleanup } = useTempXdgConfig();
     const logs: string[] = [];
-    try {
-      installApiKey("key-a");
-      const seen: SeenRequest[] = [];
-      const port = await start({
-        resolveProfile: () => profile(),
-        resolveApiKey: readApiKey,
-        fetchImpl: recordingFetch(seen),
-        log: (line) => logs.push(line),
-      });
+    installApiKey("key-a");
+    const seen: SeenRequest[] = [];
+    const port = await start({
+      resolveProfile: () => profile(),
+      resolveApiKey: readApiKey,
+      fetchImpl: recordingFetch(seen),
+      log: (line) => logs.push(line),
+    });
 
-      let res = await clientRequest(port, {
-        path: "/v1/models",
-        headers: { authorization: "Bearer key-a" },
-      });
-      assert.equal(res.status, 200);
-      assert.equal(seen.length, 1);
+    let res = await clientRequest(port, {
+      path: "/v1/models",
+      headers: { authorization: "Bearer key-a" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(seen.length, 1);
 
-      installApiKey("key-c");
-      res = await clientRequest(port, {
-        path: "/v1/models",
-        headers: { authorization: "Bearer key-b" },
-      });
-      assert.equal(res.status, 401);
-      assert.equal(seen.length, 1);
+    installApiKey("key-c");
+    res = await clientRequest(port, {
+      path: "/v1/models",
+      headers: { authorization: "Bearer key-b" },
+    });
+    assert.equal(res.status, 401);
+    assert.equal(seen.length, 1);
 
-      res = await clientRequest(port, {
-        path: "/v1/models",
-        headers: { authorization: "Bearer key-c" },
-      });
-      assert.equal(res.status, 200);
-      assert.equal(seen.length, 2);
-      assert.equal(logs.join("\n").includes("key-b"), false);
-      assert.equal(logs.join("\n").includes("key-c"), false);
-    } finally {
-      cleanup();
-    }
+    res = await clientRequest(port, {
+      path: "/v1/models",
+      headers: { authorization: "Bearer key-c" },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(seen.length, 2);
+    assert.equal(logs.join("\n").includes("key-b"), false);
+    assert.equal(logs.join("\n").includes("key-c"), false);
   });
 
   it("streams upstream chunks as they arrive without buffering", async () => {
@@ -470,32 +484,27 @@ describe("token-server forwarding", () => {
   });
 
   it("re-reads the active profile on every request so switch takes effect", async () => {
-    const { cleanup } = useTempXdgConfig();
-    try {
-      writeProfiles({
-        a: profile({ baseUrl: "https://a.example.com", token: "token-a" }),
-        b: profile({ baseUrl: "https://b.example.com", token: "token-b" }),
-      });
-      writeActiveProfile("a");
+    writeProfiles({
+      a: profile({ baseUrl: "https://a.example.com", token: "token-a" }),
+      b: profile({ baseUrl: "https://b.example.com", token: "token-b" }),
+    });
+    writeActiveProfile("a");
 
-      const seen: SeenRequest[] = [];
-      const port = await start({
-        resolveProfile: resolveActiveProfile,
-        fetchImpl: recordingFetch(seen),
-      });
+    const seen: SeenRequest[] = [];
+    const port = await start({
+      resolveProfile: resolveActiveProfile,
+      fetchImpl: recordingFetch(seen),
+    });
 
-      await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
-      assert.equal(seen[0]?.url, "https://a.example.com/ping");
-      assert.equal(seen[0]?.headers["authorization"], "Bearer token-a");
+    await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
+    assert.equal(seen[0]?.url, "https://a.example.com/ping");
+    assert.equal(seen[0]?.headers["authorization"], "Bearer token-a");
 
-      writeActiveProfile("b");
+    writeActiveProfile("b");
 
-      await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
-      assert.equal(seen[1]?.url, "https://b.example.com/ping");
-      assert.equal(seen[1]?.headers["authorization"], "Bearer token-b");
-    } finally {
-      cleanup();
-    }
+    await clientRequest(port, { path: "/v1/ping", headers: authHeaders() });
+    assert.equal(seen[1]?.url, "https://b.example.com/ping");
+    assert.equal(seen[1]?.headers["authorization"], "Bearer token-b");
   });
 
   it("passes through upstream response headers but not hop-by-hop ones", async () => {
@@ -516,5 +525,6 @@ describe("token-server forwarding", () => {
     assert.equal(res.headers["content-type"], "text/plain");
     assert.equal(res.headers["x-custom"], "kept");
     assert.equal(res.headers["proxy-authenticate"], undefined);
+    assert.equal(res.headers["x-powered-by"], undefined);
   });
 });

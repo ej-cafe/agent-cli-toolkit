@@ -45,7 +45,7 @@ pnpm --filter @agent-cli-toolkit/cli dev   # 用 tsx 跑源码
 
 token profile（含各自的模型列表）保存在该目录下的 `token-profile.json`。
 
-`token-server` 另用四个文件：`token-server.json`（激活 profile 名）、`token-server.pid`（运行中服务器，`{ pid, host, port }`）、`token-server.log`（守护进程日志）、`token-server.key`（服务器 API key，0600 权限，`gen-api-key` 生成）。
+`token-server` 另用至多六个文件：`token-server.json`（激活 profile 名）、`token-server.pid`（运行中服务器，`{ pid, host, port }`）、`token-server.log`（守护进程日志）、`token-server.key`（服务器 API key，0600 权限，`gen-api-key` 生成）、`token-server-access.jsonl`（代理访问记录，始终写入）、`token-server-access-body.jsonl`（请求体与响应体追踪，默认写入，`--no-trace-body` 关闭）。
 
 ## 命令总览
 
@@ -320,7 +320,7 @@ agent-cli token-server use [--all | --tool <id>] [--model <id>]
 #  基于 switch 确定的激活 profile，把选中工具的 baseUrl 指向本地服务器、apiKey 写为生成的服务器 key
 #  （不设定激活值；claude-code 写 /anthropic，opencode / dsh / pi 写 /v1）
 agent-cli token-server start                   # 后台启动（默认 127.0.0.1:8787；启动成功会打印两个 baseUrl 与 apiKey）
-agent-cli token-server start --port <port> [--foreground]
+agent-cli token-server start --port <port> [--foreground] [--no-trace-body]
 agent-cli token-server stop                    # 终止并清理 pidfile
 ```
 
@@ -338,6 +338,46 @@ TOKEN_SERVER_E2E_BAILIAN_TOKEN=sk-... pnpm test
 | Anthropic 兼容（Claude Code 等） | `http://127.0.0.1:8787/anthropic` |
 
 服务器按路径路由：以 `/anthropic` 开头的请求转发到激活 profile 的 `claudeBaseUrl`（缺失时回退 `baseUrl`），其余请求转发到 `baseUrl`；查询串、请求方法与请求体原样转发，入站 `authorization` / `x-api-key`（先经服务器 key 校验）会被激活 profile 的 token 替换，绝不把服务器 key 透传给上游。
+
+### 访问记录
+
+服务器始终把每次入站请求（成功与失败）记一行 JSON 到配置目录下 `token-server-access.jsonl`（JSON Lines，跨重启保留；目录不存在时自动创建）。字段：
+
+| 字段 | 说明 |
+|------|------|
+| `time` | ISO 8601 时间戳 |
+| `method` | HTTP 方法 |
+| `path` | 请求路径（不含查询串） |
+| `status` | 返回给客户端的状态码 |
+| `profile` | 本次请求使用的激活 profile 名；未解析到时为 `null` |
+| `durationMs` | 请求处理耗时（毫秒） |
+| `error` | 失败类别（`invalid_api_key` / `no_active_profile` / `profile_read_failed` / `invalid_base_url` / `upstream_failed`）；成功为 `null` |
+
+记录在响应结束后写入，写入失败不影响转发（最多在 stderr 提示一次）。记录**不含** token、服务器 API key、请求头、请求体、响应体或查询串。没有查看子命令，直接读取文件即可，例如 `tail -f ~/.config/agent-cli-toolkit/token-server-access.jsonl | jq .`。
+
+### 请求体与响应体追踪
+
+默认开启。已通过鉴权的请求会把入站请求体与上游响应体追加到配置目录下 `token-server-access-body.jsonl`（JSON Lines）；用 `--no-trace-body`（前台启动直接传，后台启动会把该标志传给守护进程）可关闭，关闭时不创建也不写入该文件。字段：
+
+| 字段 | 说明 |
+|------|------|
+| `time` | ISO 8601 时间戳，与对应的访问记录一致 |
+| `method` | HTTP 方法 |
+| `path` | 请求路径（不含查询串） |
+| `profile` | 激活 profile 名或 `null` |
+| `requestContentType` | 入站 `content-type` 头值或 `null` |
+| `requestBody` | 请求体文本；跳过或无法追踪时为 `null` |
+| `requestBodyTruncated` | 请求体是否因超过 64 KiB 被截断 |
+| `requestBodySkipped` | 请求体跳过原因（非文本内容类型），未跳过为 `null` |
+| `responseStatus` | 返回给客户端的状态码 |
+| `responseContentType` | 上游 `content-type` 或 `null` |
+| `responseBody` | 响应体文本；跳过或无法追踪时为 `null` |
+| `responseBodyTruncated` | 响应体是否因超过 64 KiB 被截断 |
+| `responseBodySkipped` | 响应体跳过原因（非文本内容类型），未跳过为 `null` |
+
+限制：请求体与响应体各自只追踪文本类内容类型（`application/json`、`application/x-ndjson`、`text/*`、`application/x-www-form-urlencoded`），其他类型只记对应的 skipped 字段；`GET` / `HEAD` 无请求体，请求体字段为 `null`，但响应体照常记录；单侧超过 64 KiB 只留前 64 KiB（转发给上游与客户端的内容保持完整）；未通过鉴权、无激活 profile 或 baseUrl 无效的请求在读取请求体前即被拒绝，不产生追踪记录。
+
+追踪在转发的同时旁路捕获，不缓冲整个请求体或响应体，流式响应（如 `text/event-stream`）也不例外；写入失败不影响转发（最多在 stderr 提示一次）。记录**不含**服务器 API key、profile 的 token、请求头、响应头或查询串。**请求体与响应体可能包含用户 prompt / 模型输出等敏感数据；默认开启，如不需要请用 `--no-trace-body` 关闭，并妥善保管该文件。**
 
 ### 安全边界
 
