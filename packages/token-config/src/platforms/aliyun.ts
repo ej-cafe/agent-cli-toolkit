@@ -78,6 +78,7 @@ function aliyunWindowRows(
   };
   push("5 小时窗口", data.per5HourPercentage, data.per5HourResetTime);
   push("7 天窗口", data.per1WeekPercentage, data.per1WeekResetTime);
+  push("1 个月窗口", data.per1MonthPercentage, data.per1MonthResetTime);
   return rows;
 }
 
@@ -93,11 +94,19 @@ function summarizeAliyunUsage(data: Record<string, unknown>): string {
     data.per1WeekPercentage,
     data.per1WeekResetTime,
   );
+  const month = formatWindow(
+    "1 个月窗口",
+    data.per1MonthPercentage,
+    data.per1MonthResetTime,
+  );
   if (fiveHour) {
     lines.push(fiveHour);
   }
   if (week) {
     lines.push(week);
+  }
+  if (month) {
+    lines.push(month);
   }
   if (lines.length === 1) {
     lines.push(JSON.stringify(data, null, 2));

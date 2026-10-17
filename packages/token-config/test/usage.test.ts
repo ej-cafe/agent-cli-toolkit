@@ -501,6 +501,8 @@ const aliyunTokenPlan = {
   per5HourResetTime: Date.UTC(2027, 2, 22, 6, 30, 0),
   per1WeekPercentage: 0.5,
   per1WeekResetTime: Date.UTC(2027, 2, 25, 0, 0, 0),
+  per1MonthPercentage: 0.3231,
+  per1MonthResetTime: Date.UTC(2027, 3, 22, 0, 0, 0),
   extraField: "keep-me",
 };
 
@@ -533,6 +535,8 @@ describe("aliyun usage", () => {
       assert.ok(stdout.includes("12.3%"));
       assert.ok(stdout.includes("7 天窗口"));
       assert.ok(stdout.includes("50%"));
+      assert.ok(stdout.includes("1 个月窗口"));
+      assert.ok(stdout.includes("32.3%"));
     } finally {
       restore();
     }
@@ -568,6 +572,7 @@ describe("aliyun usage", () => {
       assert.equal(text.code, 0);
       assert.ok(text.stdout.includes("阿里云百炼 Token Plan 余量"));
       assert.ok(text.stdout.includes("5 小时窗口: 已用 12.3%"));
+      assert.ok(text.stdout.includes("1 个月窗口: 已用"));
       assert.ok(!/窗口\s+已用\s+重置时间/.test(text.stdout));
 
       const raw = await captureStd(() =>
